@@ -2,7 +2,7 @@
 
 ## Status
 **Aceito** — 2026-06-28
-> Nota: modelo dos agentes/roteador atualizado por [ADR-008](ADR-008-agent-model-openai.md) — Claude → OpenAI `gpt-4.1-mini`. Resto deste ADR permanece válido.
+> Nota: modelo dos agentes/roteador/análise de imagem atualizado por [ADR-008](ADR-008-agent-model-openai.md) — Claude → OpenAI (`gpt-4.1-mini` texto, OpenAI Vision para imagem). Resto deste ADR permanece válido.
 
 ## Contexto
 
@@ -19,7 +19,7 @@ com dois agentes + um roteador, substituindo OpenAI por Claude API.
 | Entrada de mensagens | UAZAPI webhook | Recebe texto, áudio, imagem do WhatsApp |
 | Roteamento de tipo | Backend Node.js | Identifica tipo de mensagem (texto/áudio/imagem) |
 | Transcrição de áudio | Groq API (`whisper-large-v3-turbo`) | Converte áudio → texto em PT-BR |
-| Análise de imagem | Claude API (vision) | Descreve imagem → texto para o agente |
+| Análise de imagem | OpenAI Vision (ADR-008) | Descreve imagem → texto para o agente |
 | Memória de conversa | Redis (`memoryRedisChat`) | Context window das últimas 15 trocas por sessão |
 | Junção de mensagens | Redis (list + push) | Acumula msgs enviadas em sequência (wait 45s) |
 | Pausa humana | Redis (`_block` key, TTL 3600s) | Bloqueia IA quando humano assume |
@@ -68,7 +68,7 @@ com dois agentes + um roteador, substituindo OpenAI por Claude API.
    'conversation'        → usar texto direto
    'ExtendedTextMessage' → usar texto direto
    'audioMessage'        → download UAZAPI → Groq Whisper → texto
-   'imageMessage'        → download UAZAPI → Claude Vision → descrição texto
+   'imageMessage'        → download UAZAPI → OpenAI Vision → descrição texto
 
 9. Junção de mensagens (anti-flood):
    Redis PUSH {remoteJid} ← mensagem atual
@@ -256,7 +256,7 @@ backend/src/whatsapp/
 
 backend/src/media/
 ├── audio.transcriber.ts         # Groq Whisper
-└── image.analyzer.ts            # Claude Vision
+└── image.analyzer.ts            # OpenAI Vision (ADR-008)
 ```
 
 ---
@@ -272,5 +272,5 @@ backend/src/media/
 | Fracionamento | Split por `\n\n` | Simula mensagens naturais do WhatsApp |
 | Delay entre parágrafos | 1500ms | Simula digitação humana |
 | Áudio → texto | Groq Whisper | Gratuito, rápido, ótimo PT-BR |
-| Imagem → texto | Claude Vision | Já na stack, sem SDK extra |
+| Imagem → texto | OpenAI Vision (ADR-008) | Mesmo client OpenAI do chat |
 | Roteador | Claude Haiku | Classificação rápida e barata |

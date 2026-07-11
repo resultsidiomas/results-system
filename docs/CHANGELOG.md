@@ -20,3 +20,9 @@ O que: servidor Fastify base com clients singleton (Supabase, OpenAI, Redis), pl
 Por que: base necessária antes do webhook UAZAPI (Parte 3) e agentes (Parte 5).
 Arquivos: backend/package.json, backend/tsconfig.json, backend/server.ts, backend/src/config/*.ts, backend/src/plugins/*.ts, backend/src/shared/*.ts.
 Impacto: `npx tsx backend/server.ts` sobe e responde GET /health; falha rápido se .env incompleto.
+
+## [2026-07-11] - M1: webhook UAZAPI + guards + message-join
+O que: rota POST /api/v1/webhook/whatsapp com cadeia de guards (auth token, Zod, instância, contato, pausar_ia), resolução de mídia (Groq Whisper / OpenAI Vision), junção anti-flood 45s via Redis, e tratamento fromMe (auto-block + log em memória) inspirado no fluxo de referência Vespa.json (não commitado, tinha secret de outro cliente — adicionado ao .gitignore).
+Por que: base de recepção de mensagens antes do roteador M1/M2 (Parte 4).
+Arquivos: backend/src/whatsapp/uazapi/*, backend/src/agents/shared/*, backend/src/crm/leads/contacts.repository.ts, backend/src/media/*, backend/server.ts, backend/tests/e2e/webhook.smoke.ts.
+Impacto: smoke test confirma guards de auth/validação/instância. Achado: Supabase real acessível mas tabela `contacts` (schema da Parte 1) ainda não aplicada no projeto — pendente.

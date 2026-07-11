@@ -2,6 +2,7 @@
 
 ## Status
 **Aceito** — 2026-06-28
+> Nota: modelo dos agentes/roteador atualizado por [ADR-008](ADR-008-agent-model-openai.md) — Claude → OpenAI `gpt-4.1-mini`. Resto deste ADR permanece válido.
 
 ## Contexto
 

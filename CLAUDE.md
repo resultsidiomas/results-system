@@ -37,7 +37,7 @@ OFF only: "normal mode" / "stop caveman".
 - Backend: Node.js + TypeScript + Fastify (ADR-001 ✅)
 - Banco: Supabase (PostgreSQL) + Supabase JS Client + Zod (ADR-002 ✅)
 - Deploy: EasyPanel na VPS (ADR-003 ✅)
-- IA: Claude API (`claude-sonnet-4-6`)
+- IA (agentes M1/M2 + roteador): OpenAI (`gpt-4.1-mini`) — ADR-008
 - Mensageria: WhatsApp Business API (Meta oficial)
 - Automações simples: N8n (auxiliar, nunca caminho crítico dos agentes)
 - Frontend: React + TypeScript (A/C Codex)
@@ -433,9 +433,10 @@ Todas as decisões técnicas estão registradas em `docs/decisions/`. Nenhuma pe
 | ADR-002 | Supabase JS Client + Zod |
 | ADR-003 | EasyPanel na VPS |
 | ADR-004 | UAZAPI (conversas) + Meta Oficial (disparos) |
-| ADR-005 | OpenAI gpt-4.1-mini (agentes + roteador) |
+| ADR-005 | Claude (agentes + roteador) — *Superseded por ADR-008* |
 | ADR-006 | Redis (contexto) + PostgreSQL (histórico) |
-| ADR-007 | Arquitetura completa dos agentes |
+| ADR-007 | Arquitetura completa dos agentes (modelo atualizado por ADR-008) |
+| ADR-008 | OpenAI gpt-4.1-mini (agentes + roteador) |
 
 ---
 

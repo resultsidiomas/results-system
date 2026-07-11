@@ -1,7 +1,8 @@
 # ADR-005: Modelo Claude para os Agentes
 
 ## Status
-**Aceito** — 2026-06-28
+**Superseded by [ADR-008](ADR-008-agent-model-openai.md)** — 2026-07-11
+~~Aceito — 2026-06-28~~
 
 ## Contexto
 

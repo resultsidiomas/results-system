@@ -222,7 +222,7 @@ backend/src/flows/
 | Backend | Node.js + TypeScript + Fastify | ADR-001 ✅ | DROP | ⏳ A implementar |
 | Banco | Supabase (PostgreSQL) + JS Client + Zod | ADR-002 ✅ | DROP | ⏳ A configurar |
 | Deploy/VPS | EasyPanel na VPS | ADR-003 ✅ | DROP | ⏳ A contratar |
-| IA dos agentes | Claude API (`claude-sonnet-4-6`) | — | DROP | ✅ Licença ok |
+| IA dos agentes | OpenAI (`gpt-4.1-mini`) — ADR-008 | ADR-008 ✅ | DROP | ✅ Licença ok |
 | Mensageria | WhatsApp Business API (Meta oficial) | — | RESULTS | ⏳ Pendente |
 | Frontend | React + TypeScript | — | Codex | ⏳ A implementar |
 | Automações simples | N8n (auxiliar, não crítico) | — | DROP | ⏳ Opcional |
@@ -255,8 +255,10 @@ backend/src/flows/
 | ADR-001 | Node.js + TypeScript + Fastify como backend | ✅ Aceito |
 | ADR-002 | Supabase JS Client + Zod (sem ORM extra) | ✅ Aceito |
 | ADR-003 | EasyPanel na VPS para deploy | ✅ Aceito |
-| ADR-004 | Modelo Claude para os agentes | ⏳ Pendente definição |
-| ADR-005 | Estratégia de memória dos agentes | ⏳ Pendente definição |
+| ADR-005 | Modelo Claude para os agentes | Superseded por ADR-008 |
+| ADR-006 | Estratégia de memória dos agentes (Redis+PostgreSQL) | ✅ Aceito |
+| ADR-007 | Arquitetura completa dos agentes | ✅ Aceito |
+| ADR-008 | Modelo OpenAI gpt-4.1-mini (agentes + roteador) | ✅ Aceito |
 
 ---
 

@@ -2,12 +2,14 @@ import Fastify from 'fastify';
 import { env } from './src/config/env.js';
 import corsPlugin from './src/plugins/cors.plugin.js';
 import errorHandlerPlugin from './src/plugins/error-handler.plugin.js';
+import { uazapiWebhookRoute } from './src/whatsapp/uazapi/uazapi.webhook.js';
 import { logger } from './src/shared/logger.js';
 
 const app = Fastify({ logger: false });
 
 await app.register(corsPlugin);
 await app.register(errorHandlerPlugin);
+await app.register(uazapiWebhookRoute);
 
 app.get('/health', async () => ({ status: 'ok' }));
 

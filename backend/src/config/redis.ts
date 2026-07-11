@@ -11,5 +11,5 @@ export const redis = new Redis(env.REDIS_URL, {
 // Redis down at boot must not crash the process — connection errors
 // only matter once an agent flow actually tries to use it.
 redis.on('error', (err: Error) => {
-  logger.error('redis connection error', { message: err.message });
+  logger.error('redis connection error', { errorMessage: err.message });
 });

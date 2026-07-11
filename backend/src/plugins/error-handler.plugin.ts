@@ -14,7 +14,7 @@ export default fp(async (app: FastifyInstance) => {
 
     logger.error('unhandled error', {
       path: request.url,
-      message: error.message,
+      errorMessage: error.message,
     });
 
     const body =

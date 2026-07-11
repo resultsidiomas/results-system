@@ -10,3 +10,6 @@ npm-debug.log*
 coverage/
 *.tsbuildinfo
 .turbo/
+
+# Referência externa com secrets/PII de outro cliente — nunca commitar
+Vespa.json

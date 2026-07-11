@@ -28,6 +28,7 @@ const envSchema = z.object({
   UAZAPI_TOKEN: z.string().min(1),
   UAZAPI_INSTANCE: z.string().min(1),
   UAZAPI_SEND_DELAY_MS: z.coerce.number().int().positive().default(1500),
+  UAZAPI_WEBHOOK_SECRET: z.string().min(1),
 
   // WhatsApp Oficial Meta
   WA_API_TOKEN: z.string().min(1),

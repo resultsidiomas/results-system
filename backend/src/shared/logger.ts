@@ -6,6 +6,8 @@ const REDACTED_KEYS = new Set([
   'messages',
   'content',
   'text',
+  'remoteJid',
+  'chatid',
 ]);
 
 type LogMeta = Record<string, unknown>;

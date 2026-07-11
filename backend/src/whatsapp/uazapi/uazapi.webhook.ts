@@ -7,6 +7,7 @@ import { findOrCreateContact } from '../../crm/leads/contacts.repository.js';
 import { isBlocked, setBlock } from '../../agents/shared/agent.pause.js';
 import { appendChatMessage } from '../../agents/shared/agent.memory.redis.js';
 import { joinMessages } from '../../agents/shared/agent.message-join.js';
+import { routeAgent } from '../../agents/router/agent.router.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { UnauthorizedError, BadRequestError } from '../../shared/http-errors.js';
@@ -88,8 +89,9 @@ export async function uazapiWebhookRoute(app: FastifyInstance) {
       return reply.status(200).send({ status: 'ok', reason: 'superseded' });
     }
 
-    logger.info('message ready for routing', { instanceName });
-    // Parte 4 plugs in here: route joined message to agent.router.ts
-    return reply.status(200).send({ status: 'ok' });
+    const agentType = await routeAgent(contact, joined);
+    logger.info('message routed', { instanceName, agentType });
+    // Parte 5 plugs in here: agentType decides which engine answers
+    return reply.status(200).send({ status: 'ok', agentType });
   });
 }

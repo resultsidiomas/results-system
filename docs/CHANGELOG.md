@@ -31,3 +31,9 @@ Impacto: smoke test confirma guards de auth/validação/instância. Achado: Supa
 O que: database/schema.sql aplicado manualmente pelo usuário no SQL Editor do Supabase (projeto real). Confirmado via smoke test — contact lookup/create funciona.
 Por que: schema da Parte 1 só existia local até então.
 Impacto: Redis de produção vive só na VPS (hostname interno EasyPanel, `drop-agency_redis_results`), não resolve de máquina de dev local (sem Docker instalado aqui). Fluxo completo (block/pause/message-join, 45s wait) segue não testado localmente — validar quando backend rodar na VPS. Guards de auth/validação/instância/contato já confirmados via backend/tests/e2e/webhook.smoke.ts.
+
+## [2026-07-11] - M1: roteador comercial/suporte
+O que: agent.router.ts (contact.type=student → support direto; lead → intent.classifier.ts via OpenAI gpt-4.1-mini, timeout 3s, default commercial). Plugado no webhook após message-join.
+Por que: decide silenciosamente qual agente (M1/M2) responde, sem o usuário perceber a troca.
+Arquivos: backend/src/agents/router/agent.router.ts, intent.classifier.ts, backend/src/whatsapp/uazapi/uazapi.webhook.ts, backend/tests/unit/agent.router.smoke.ts.
+Impacto: guard type=student confirmado (sem chamar API). Classificação real de intenção não verificada — OPENAI_API_KEY no .env ainda é placeholder; fallback pra 'commercial' em erro/timeout confirmado funcionando.

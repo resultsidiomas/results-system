@@ -26,3 +26,8 @@ O que: rota POST /api/v1/webhook/whatsapp com cadeia de guards (auth token, Zod,
 Por que: base de recepção de mensagens antes do roteador M1/M2 (Parte 4).
 Arquivos: backend/src/whatsapp/uazapi/*, backend/src/agents/shared/*, backend/src/crm/leads/contacts.repository.ts, backend/src/media/*, backend/server.ts, backend/tests/e2e/webhook.smoke.ts.
 Impacto: smoke test confirma guards de auth/validação/instância. Achado: Supabase real acessível mas tabela `contacts` (schema da Parte 1) ainda não aplicada no projeto — pendente.
+
+## [2026-07-11] - Infra: schema aplicado no Supabase real, Redis só VPS
+O que: database/schema.sql aplicado manualmente pelo usuário no SQL Editor do Supabase (projeto real). Confirmado via smoke test — contact lookup/create funciona.
+Por que: schema da Parte 1 só existia local até então.
+Impacto: Redis de produção vive só na VPS (hostname interno EasyPanel, `drop-agency_redis_results`), não resolve de máquina de dev local (sem Docker instalado aqui). Fluxo completo (block/pause/message-join, 45s wait) segue não testado localmente — validar quando backend rodar na VPS. Guards de auth/validação/instância/contato já confirmados via backend/tests/e2e/webhook.smoke.ts.

@@ -37,3 +37,9 @@ O que: agent.router.ts (contact.type=student → support direto; lead → intent
 Por que: decide silenciosamente qual agente (M1/M2) responde, sem o usuário perceber a troca.
 Arquivos: backend/src/agents/router/agent.router.ts, intent.classifier.ts, backend/src/whatsapp/uazapi/uazapi.webhook.ts, backend/tests/unit/agent.router.smoke.ts.
 Impacto: guard type=student confirmado (sem chamar API). Classificação real de intenção não verificada — OPENAI_API_KEY no .env ainda é placeholder; fallback pra 'commercial' em erro/timeout confirmado funcionando.
+
+## [2026-07-12] - M1: motor do agente comercial
+O que: commercial.service.ts orquestra turno via OpenAI (structured output json_schema), score calculado deterministicamente em código (não confia em autoavaliação do LLM), persistência dupla Redis (contexto) + Supabase (histórico/score/collected_data), handoff pra Gi em score>=7 (pausar_ia='Sim' + alerta via GI_ALERT_NUMBER, opcional). Webhook agora envia resposta real fracionada via UAZAPI quando agentType=commercial.
+Por que: entrega o core do M1 — qualificação de lead ponta a ponta.
+Arquivos: backend/src/agents/commercial/*, backend/src/agents/shared/agent.context.ts, agent.fracture.ts, agent.memory.pg.ts, backend/src/whatsapp/uazapi/uazapi.sender.ts (sendText exportado, reusa fracture), uazapi.webhook.ts.
+Impacto: CA-02 (scoring, 7 casos), CA-03 (pausar_ia='Sim' pós-handoff) e CA-04 (sem GI_ALERT_NUMBER não quebra) confirmados contra Supabase real. CA-01/CA-06 (resposta real do OpenAI) não verificados — OPENAI_API_KEY segue placeholder. Dados de teste (5511977776666, 5511988887777) removidos do Supabase após verificação.

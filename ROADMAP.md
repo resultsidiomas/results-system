@@ -49,15 +49,20 @@ SEM 5  (8–11 jul)   ████████  Fase III — Power BI, otimizaç
 ### M1 — Agente de IA Comercial `P0 · CRÍTICO`
 **Semanas:** 1–2 | **Fase:** I | **Responsável backend:** Claude Code
 
+> **Status Sessão 001 (2026-07-12):** arquitetura base completa (webhook →
+> guards → roteador → motor do agente). Pendente: `OPENAI_API_KEY` real pra
+> validar respostas de verdade, UAZAPI real conectado. Detalhes completos em
+> [`docs/handoffs/2026-07-12-sessao-001.md`](docs/handoffs/2026-07-12-sessao-001.md).
+
 **Entregas:**
-- [ ] Recepção automática de leads via WhatsApp 24/7
-- [ ] Triagem e qualificação (curso, horário, frequência, objetivo)
-- [ ] Lead Scoring automático 0–10
-- [ ] Handoff para Gi em leads score ≥ 7
-- [ ] Cadência automática de follow-up (3 / 7 / 14 dias) para leads frios
-- [ ] Envio automático de apresentação da escola e planos
-- [ ] Agendamento de aula experimental via link ou chat
-- [ ] Relatório diário: leads recebidos, convertidos, pendentes
+- [ ] Recepção automática de leads via WhatsApp 24/7 — código completo, não testado com UAZAPI/OpenAI reais
+- [ ] Triagem e qualificação (curso, horário, frequência, objetivo) — código completo, não testado com OpenAI real
+- [x] Lead Scoring automático 0–10 — determinístico, testado (7 casos)
+- [x] Handoff para Gi em leads score ≥ 7 — `pausar_ia` testado; alerta WhatsApp pendente `GI_ALERT_NUMBER`
+- [ ] Cadência automática de follow-up (3 / 7 / 14 dias) para leads frios — tabela `lead_followups` existe, scheduler não implementado
+- [ ] Envio automático de apresentação da escola e planos — pendente knowledge base real (bloqueador B1/B2)
+- [ ] Agendamento de aula experimental via link ou chat — não implementado
+- [ ] Relatório diário: leads recebidos, convertidos, pendentes — não implementado
 
 **Arquivos principais:**
 ```

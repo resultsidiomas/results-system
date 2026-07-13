@@ -16,3 +16,9 @@ export async function appendChatMessage(
   // Keep last N exchanges (pairs), i.e. N*2 messages.
   await redis.ltrim(key, -env.AGENT_HISTORY_LIMIT * 2, -1);
 }
+
+export async function getChatHistory(instance: string, remoteJid: string): Promise<ChatMessage[]> {
+  const key = sessionKey(instance, remoteJid);
+  const raw = await redis.lrange(key, 0, -1);
+  return raw.map((entry) => JSON.parse(entry) as ChatMessage);
+}

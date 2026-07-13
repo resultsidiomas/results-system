@@ -8,6 +8,8 @@ import { isBlocked, setBlock } from '../../agents/shared/agent.pause.js';
 import { appendChatMessage } from '../../agents/shared/agent.memory.redis.js';
 import { joinMessages } from '../../agents/shared/agent.message-join.js';
 import { routeAgent } from '../../agents/router/agent.router.js';
+import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
+import { sendFractured } from './uazapi.sender.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { UnauthorizedError, BadRequestError } from '../../shared/http-errors.js';
@@ -91,7 +93,14 @@ export async function uazapiWebhookRoute(app: FastifyInstance) {
 
     const agentType = await routeAgent(contact, joined);
     logger.info('message routed', { instanceName, agentType });
-    // Parte 5 plugs in here: agentType decides which engine answers
+
+    if (agentType === 'commercial') {
+      const turn = await runCommercialTurn(contact, instanceName, remoteJid, joined);
+      await sendFractured(remoteJid, turn.reply);
+      return reply.status(200).send({ status: 'ok', agentType, leadScore: turn.leadScore });
+    }
+
+    // M2 (support) plugs in here in a future session
     return reply.status(200).send({ status: 'ok', agentType });
   });
 }

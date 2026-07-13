@@ -3,3 +3,8 @@ export interface ChatMessage {
   content: string;
   at: string;
 }
+
+export interface AgentTurnResult {
+  reply: string;
+  leadScore: number;
+}

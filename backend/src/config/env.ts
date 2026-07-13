@@ -39,6 +39,9 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string().min(1),
   GROQ_MODEL: z.string().default('whisper-large-v3-turbo'),
 
+  // Handoff (M1 -> Gi)
+  GI_ALERT_NUMBER: z.string().optional(),
+
   // App
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),

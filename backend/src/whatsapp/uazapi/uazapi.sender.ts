@@ -1,7 +1,8 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
+import { fractureMessage } from '../../agents/shared/agent.fracture.js';
 
-async function sendText(remoteJid: string, text: string): Promise<void> {
+export async function sendText(remoteJid: string, text: string): Promise<void> {
   const res = await fetch(`${env.UAZAPI_URL}/send/text`, {
     method: 'POST',
     headers: {
@@ -18,8 +19,7 @@ async function sendText(remoteJid: string, text: string): Promise<void> {
 }
 
 export async function sendFractured(remoteJid: string, fullText: string): Promise<void> {
-  const paragraphs = fullText.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
-  for (const paragraph of paragraphs) {
+  for (const paragraph of fractureMessage(fullText)) {
     await sendText(remoteJid, paragraph);
   }
 }

@@ -14,6 +14,16 @@ import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { UnauthorizedError, BadRequestError } from '../../shared/http-errors.js';
 
+function isAllowedTestNumber(remoteJid: string): boolean {
+  if (!env.TEST_ALLOWED_NUMBERS) return true;
+
+  const allowlist = env.TEST_ALLOWED_NUMBERS.split(',')
+    .map((n) => n.trim())
+    .filter(Boolean);
+
+  return allowlist.length === 0 || allowlist.includes(remoteJid);
+}
+
 async function resolveMessageText(
   messageId: string,
   messageType: string,
@@ -55,6 +65,10 @@ export async function uazapiWebhookRoute(app: FastifyInstance) {
 
     const remoteJid = chat.wa_chatid;
     const phone = message.chatid.split('@')[0];
+
+    if (!isAllowedTestNumber(remoteJid)) {
+      return reply.status(200).send({ status: 'ignored', reason: 'not_in_test_allowlist' });
+    }
 
     const contact = await findOrCreateContact(phone, chat.wa_name);
 

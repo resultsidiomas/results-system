@@ -46,6 +46,11 @@ const envSchema = z.object({
   // Console de teste do agente (frontend interno, sem WhatsApp real)
   TEST_CONSOLE_TOKEN: z.string().min(1),
 
+  // Allowlist temporária de teste (M1 em validação) — lista de wa_chatid
+  // separados por vírgula; se definida, webhook só responde a esses números.
+  // Vazio/ausente = responde a todos (comportamento normal de produção).
+  TEST_ALLOWED_NUMBERS: z.string().optional(),
+
   // App
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),

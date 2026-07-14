@@ -1,6 +1,10 @@
 import { env } from '../config/env.js';
 
 export async function transcribeAudio(audioBuffer: Buffer, mimeType = 'audio/ogg'): Promise<string> {
+  if (!env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY not configured — audio transcription unavailable');
+  }
+
   const form = new FormData();
   form.append('model', env.GROQ_MODEL);
   form.append('temperature', '0');

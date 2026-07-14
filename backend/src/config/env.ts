@@ -17,9 +17,6 @@ const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 
-  // PostgreSQL direto
-  DATABASE_URL: z.string().min(1),
-
   // Redis
   REDIS_URL: z.string().min(1),
   REDIS_PASSWORD: z.string().optional(),
@@ -34,13 +31,13 @@ const envSchema = z.object({
   UAZAPI_SEND_DELAY_MS: z.coerce.number().int().positive().default(1500),
   UAZAPI_WEBHOOK_SECRET: z.string().min(1),
 
-  // WhatsApp Oficial Meta
-  WA_API_TOKEN: z.string().min(1),
-  WA_PHONE_NUMBER_ID: z.string().min(1),
-  WA_BUSINESS_ACCOUNT_ID: z.string().min(1),
+  // WhatsApp Oficial Meta (M5 — ainda não implementado, sem uso no código hoje)
+  WA_API_TOKEN: z.string().optional(),
+  WA_PHONE_NUMBER_ID: z.string().optional(),
+  WA_BUSINESS_ACCOUNT_ID: z.string().optional(),
 
-  // Groq
-  GROQ_API_KEY: z.string().min(1),
+  // Groq (transcrição de áudio — sem isso, mensagens de áudio falham, texto/imagem seguem ok)
+  GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default('whisper-large-v3-turbo'),
 
   // Handoff (M1 -> Gi)

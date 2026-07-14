@@ -77,14 +77,29 @@ SEM 5  (8–11 jul)   ████████  Fase III — Power BI, otimizaç
 > de teste do agente pronta (`backend/src/testing/`), frontend roteado pro
 > Codex. Detalhes completos e próximos passos em
 > [`docs/handoffs/2026-07-14-sessao-002.md`](docs/handoffs/2026-07-14-sessao-002.md).
+>
+> **Update 2026-07-14 (2):** deploy real na VPS via EasyPanel — backend no
+> ar (`/health` 200), UAZAPI real conectada (URL+token reais), webhook
+> configurado (token via query string, painel só aceita URL simples).
+> Allowlist temporária (`TEST_ALLOWED_NUMBERS`) restringe resposta a 2
+> números de teste enquanto valida o conversacional. Preço agora vai por
+> **imagem real da tabela** (`backend/assets/price-table/`), nunca mais
+> citado em texto — elimina risco de valor errado. Migration do vector
+> store aplicada no Supabase real + `npm run ingest:knowledge` rodado (30
+> chunks: 19 commercial, 11 shared) — RAG confirmado funcionando
+> ponta-a-ponta (retrieval testado contra Supabase real). No caminho,
+> achados e corrigidos 3 bugs reais que impediam o servidor de rodar de
+> verdade: env vars obrigatórias sem uso real, path de leitura do
+> `prompt-v1.md` com profundidade errada, imagem Docker Node 20 abaixo do
+> mínimo exigido pelo `@supabase/realtime-js` (`>=22`).
 
 **Entregas:**
-- [ ] Recepção automática de leads via WhatsApp 24/7 — código completo, não testado com UAZAPI/OpenAI reais
-- [ ] Triagem e qualificação (curso, horário, frequência, objetivo) — código completo, não testado com OpenAI real
+- [x] Recepção automática de leads via WhatsApp 24/7 — deploy real na VPS, webhook configurado, allowlist de 2 números pra validação em andamento
+- [ ] Triagem e qualificação (curso, horário, frequência, objetivo) — em validação real via WhatsApp (números de teste), ainda sem confirmação de conversa completa ponta-a-ponta
 - [x] Lead Scoring automático 0–10 — determinístico, testado (7 casos)
 - [x] Handoff para Gi em leads score ≥ 7 — `pausar_ia` testado; alerta WhatsApp pendente `GI_ALERT_NUMBER`
 - [ ] Cadência automática de follow-up (3 / 7 / 14 dias) para leads frios — tabela `lead_followups` existe, scheduler não implementado
-- [ ] Envio automático de apresentação da escola e planos — conteúdo real pronto (`agents/commercial/knowledge-base.md`), falta migration + ingestão no Supabase real
+- [x] Envio automático de apresentação da escola e planos — RAG ativo (migration + ingestão feitas, 30 chunks), preço enviado como foto real da tabela, não mais texto
 - [ ] Agendamento de aula experimental via link ou chat — não implementado
 - [ ] Relatório diário: leads recebidos, convertidos, pendentes — não implementado
 

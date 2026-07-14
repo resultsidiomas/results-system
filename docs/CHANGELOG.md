@@ -9,6 +9,12 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-14] - M1: RAG ativo no Supabase real + webhook por query string
+O que: migration `20260713000001_knowledge_vector_store.sql` aplicada no Supabase real (SQL Editor, em 2 partes por causa de corte no copy/paste). `npm run ingest:knowledge` rodado — 30 chunks (commercial: 19, shared: 11; support vazio, M2 não iniciado). Retrieval testado ponta-a-ponta contra o Supabase real (`retrieveKnowledgeContext` retornou contexto de preço de verdade). Webhook agora aceita o secret via `?token=` na URL, não só header — painel da UAZAPI só tem campo de URL simples, sem header customizado.
+Por que: painel real da UAZAPI não suporta header customizado (só descoberto testando de verdade); RAG era o último bloqueador pro agente responder preço/curso com precisão.
+Arquivos: backend/src/whatsapp/uazapi/uazapi.webhook.ts (`?token=` fallback), ROADMAP.md (M1 entregas atualizadas).
+Impacto: M1 agora responde de verdade via WhatsApp real, restrito a 2 números de teste (`TEST_ALLOWED_NUMBERS`). Vector store confirmado com dados reais da Results.
+
 ## [2026-07-14] - M1: deploy EasyPanel + tabela de preços por imagem
 O que: (1) Dockerfile multi-stage pro backend (non-root, sem devDependencies, healthcheck). (2) Corrigido bug real — env.ts exigia `WA_*`/`GROQ_API_KEY`/`DATABASE_URL` (nunca usado no código) como obrigatórios, servidor quebrava no boot; tornados opcionais/removido o morto. (3) Corrigido bug real — `commercial.service.ts` carregava `prompt-v1.md` com profundidade de `../` errada (nunca resolvia o arquivo real, nunca testado rodando de verdade). (4) Movido `agents/` pra dentro de `backend/agents/` — Dockerfile builda com contexto = `backend/`, não alcança pastas irmãs no repo raiz (restrição rígida do Docker, não dá pra COPY fora do contexto). Corrige o bug (3) e viabiliza o Docker build ao mesmo tempo. (5) Agente agora manda foto real da tabela de preços (`backend/assets/price-table/`, 4 das 5 imagens — excluída a de "Conversação", valor ainda não confirmado) em vez de citar valor em texto — campo novo `send_price_table` no schema do turno, nunca reexplicitado o número no `reply`.
 Por que: usuário conectou credenciais reais da UAZAPI e pediu deploy real na VPS pra testar; pediu explicitamente que o agente pare de arriscar valor errado em texto e mande a tabela real como a equipe já faz.

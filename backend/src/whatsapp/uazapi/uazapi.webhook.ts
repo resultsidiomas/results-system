@@ -46,7 +46,8 @@ async function resolveMessageText(
 
 export async function uazapiWebhookRoute(app: FastifyInstance) {
   app.post('/api/v1/webhook/whatsapp', async (request: FastifyRequest, reply: FastifyReply) => {
-    const token = request.headers['x-webhook-token'];
+    const { token: queryToken } = request.query as { token?: string };
+    const token = request.headers['x-webhook-token'] ?? queryToken;
     if (token !== env.UAZAPI_WEBHOOK_SECRET) {
       throw new UnauthorizedError('invalid webhook token');
     }

@@ -83,6 +83,63 @@ create index idx_lead_followups_scheduled_at on lead_followups (scheduled_at);
 alter table lead_followups enable row level security;
 
 -- =========================================================
+-- knowledge_chunks (ADR-009: vector store RAG, Supabase pgvector)
+-- =========================================================
+create extension if not exists vector;
+
+create table knowledge_chunks (
+  id          uuid primary key default gen_random_uuid(),
+  agent_type  text not null
+              check (agent_type in ('commercial', 'support', 'shared')),
+  source      text not null,
+  heading     text,
+  content     text not null,
+  embedding   vector(1536) not null,
+  metadata    jsonb not null default '{}'::jsonb,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index idx_knowledge_chunks_agent_type on knowledge_chunks (agent_type);
+create index idx_knowledge_chunks_source on knowledge_chunks (source);
+create index idx_knowledge_chunks_embedding on knowledge_chunks
+  using hnsw (embedding vector_cosine_ops);
+
+create trigger trg_knowledge_chunks_updated_at
+  before update on knowledge_chunks
+  for each row execute function set_updated_at();
+
+alter table knowledge_chunks enable row level security;
+
+create or replace function match_knowledge_chunks(
+  query_embedding vector(1536),
+  match_agent_type text,
+  match_count int default 4
+)
+returns table (
+  id uuid,
+  source text,
+  heading text,
+  content text,
+  similarity float
+)
+language sql
+stable
+as $$
+  select
+    knowledge_chunks.id,
+    knowledge_chunks.source,
+    knowledge_chunks.heading,
+    knowledge_chunks.content,
+    1 - (knowledge_chunks.embedding <=> query_embedding) as similarity
+  from knowledge_chunks
+  where knowledge_chunks.agent_type = match_agent_type
+     or knowledge_chunks.agent_type = 'shared'
+  order by knowledge_chunks.embedding <=> query_embedding
+  limit match_count;
+$$;
+
+-- =========================================================
 -- RLS: acesso apenas via service_role (backend). Sem policies
 -- de leitura pública nesta fase — CRM/frontend consome via API
 -- backend, não direto no Supabase client anônimo.

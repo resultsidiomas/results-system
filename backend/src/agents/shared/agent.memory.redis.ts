@@ -22,3 +22,7 @@ export async function getChatHistory(instance: string, remoteJid: string): Promi
   const raw = await redis.lrange(key, 0, -1);
   return raw.map((entry) => JSON.parse(entry) as ChatMessage);
 }
+
+export async function clearChatHistory(instance: string, remoteJid: string): Promise<void> {
+  await redis.del(sessionKey(instance, remoteJid));
+}

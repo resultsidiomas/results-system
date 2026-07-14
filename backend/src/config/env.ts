@@ -7,6 +7,10 @@ const envSchema = z.object({
   OPENAI_MODEL_SUPPORT: z.string().default('gpt-4.1-mini'),
   OPENAI_MODEL_ROUTER: z.string().default('gpt-4.1-mini'),
   OPENAI_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
+  OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+
+  // Knowledge base / RAG (ADR-009)
+  KNOWLEDGE_MATCH_COUNT: z.coerce.number().int().positive().default(4),
 
   // Supabase
   SUPABASE_URL: z.string().url(),
@@ -41,6 +45,9 @@ const envSchema = z.object({
 
   // Handoff (M1 -> Gi)
   GI_ALERT_NUMBER: z.string().optional(),
+
+  // Console de teste do agente (frontend interno, sem WhatsApp real)
+  TEST_CONSOLE_TOKEN: z.string().min(1),
 
   // App
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

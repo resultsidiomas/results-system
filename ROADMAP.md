@@ -53,6 +53,30 @@ SEM 5  (8–11 jul)   ████████  Fase III — Power BI, otimizaç
 > guards → roteador → motor do agente). Pendente: `OPENAI_API_KEY` real pra
 > validar respostas de verdade, UAZAPI real conectado. Detalhes completos em
 > [`docs/handoffs/2026-07-12-sessao-001.md`](docs/handoffs/2026-07-12-sessao-001.md).
+>
+> **Update 2026-07-13:** `OPENAI_API_KEY` real configurada. UAZAPI conectada
+> (credenciais a caminho). Vector store RAG pronta (ADR-009) — pgvector no
+> Supabase + pipeline de ingestão (`npm run ingest:knowledge`).
+>
+> **Update 2026-07-13 (2):** B2/B3 resolvidos — Results anexou tabelas de
+> preço reais + scripts de atendimento + 5 conversas reais de WhatsApp
+> (76 imagens). Processado e escrito em `agents/commercial/` (prompt-v1.md,
+> knowledge-base.md, objections.md, scoring-rules.md, handoff-rules.md) e
+> `agents/shared/` (school-info.md, persona.md, forbidden-phrases.md).
+> `commercial.service.ts` agora carrega `prompt-v1.md` real (não mais
+> placeholder). Falta só: (1) rodar a migration
+> `20260713000001_knowledge_vector_store.sql` no Supabase real, (2) rodar
+> `npm run ingest:knowledge` pra popular o vector store, (3) confirmar com a
+> Results os valores marcados ⚠️ em `knowledge-base.md` (plano Conversação,
+> materiais Business/Kids/Grammar). Doc 3 (B1) ainda pendente — não bloqueia
+> mais o core comercial, já que preço/script/tom já vieram por outra via.
+>
+> **Update 2026-07-14:** persona confirmada pelo usuário — agente se
+> apresenta como **"Jessica da equipe Results Idiomas"** (nome próprio pra
+> familiaridade, sem reusar o nome da Gislaine/pessoa real). API do console
+> de teste do agente pronta (`backend/src/testing/`), frontend roteado pro
+> Codex. Detalhes completos e próximos passos em
+> [`docs/handoffs/2026-07-14-sessao-002.md`](docs/handoffs/2026-07-14-sessao-002.md).
 
 **Entregas:**
 - [ ] Recepção automática de leads via WhatsApp 24/7 — código completo, não testado com UAZAPI/OpenAI reais
@@ -60,7 +84,7 @@ SEM 5  (8–11 jul)   ████████  Fase III — Power BI, otimizaç
 - [x] Lead Scoring automático 0–10 — determinístico, testado (7 casos)
 - [x] Handoff para Gi em leads score ≥ 7 — `pausar_ia` testado; alerta WhatsApp pendente `GI_ALERT_NUMBER`
 - [ ] Cadência automática de follow-up (3 / 7 / 14 dias) para leads frios — tabela `lead_followups` existe, scheduler não implementado
-- [ ] Envio automático de apresentação da escola e planos — pendente knowledge base real (bloqueador B1/B2)
+- [ ] Envio automático de apresentação da escola e planos — conteúdo real pronto (`agents/commercial/knowledge-base.md`), falta migration + ingestão no Supabase real
 - [ ] Agendamento de aula experimental via link ou chat — não implementado
 - [ ] Relatório diário: leads recebidos, convertidos, pendentes — não implementado
 
@@ -245,8 +269,8 @@ backend/src/flows/
 | # | Bloqueador | Responsável | Impacto |
 |---|-----------|------------|---------|
 | B1 | Doc 3 (Briefing do Agente) sem preenchimento | RESULTS | Bloqueia M1 e M2 totalmente |
-| B2 | Tabela de preços e cursos não entregue | RESULTS | Bloqueia knowledge base dos agentes |
-| B3 | Scripts de atendimento da Gi não enviados | RESULTS | Bloqueia treinamento do agente comercial |
+| B2 | ✅ Resolvido 2026-07-13 — tabela de preços entregue (`docs.agente/Tabelas de Preços/`), processada em `agents/commercial/knowledge-base.md` | RESULTS | — |
+| B3 | ✅ Resolvido 2026-07-13 — scripts + atendimentos reais entregues (`docs.agente/`), processados em `agents/commercial/prompt-v1.md`, `objections.md`, `agents/shared/persona.md` | RESULTS | — |
 | B4 | WhatsApp Business API não contratada | RESULTS | Bloqueia integração de todos os agentes |
 | B5 | VPS + EasyPanel não contratada | DROP | Bloqueia toda a infraestrutura |
 | B6 | Supabase não configurado | DROP | Bloqueia banco de dados |

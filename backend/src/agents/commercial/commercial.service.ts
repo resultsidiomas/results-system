@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { openai } from '../../config/openai.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
@@ -9,24 +12,35 @@ import { buildMessages } from '../shared/agent.context.js';
 import { commercialTurnSchema, commercialResponseJsonSchema } from './commercial.schema.js';
 import { scoreLead, shouldHandoff } from './commercial.scoring.js';
 import { handoffToGi } from './commercial.handoff.js';
+import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
 
-const SYSTEM_PROMPT = `Você é um assistente de atendimento da Results Idiomas, uma escola de idiomas.
-Seu objetivo é qualificar leads interessados em cursos de idiomas.
-Seja cordial, objetivo e profissional.
-Colete ao longo da conversa: curso de interesse, disponibilidade de horário, objetivo do aluno.
-Responda sempre com o objeto estruturado pedido — nunca texto solto fora do schema.`;
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const PROMPT_PATH = resolve(__dirname, '../../../../agents/commercial/prompt-v1.md');
+const SYSTEM_PROMPT = readFileSync(PROMPT_PATH, 'utf-8');
+
+function buildSystemPrompt(knowledgeContext: string): string {
+  if (!knowledgeContext) return SYSTEM_PROMPT;
+  return `${SYSTEM_PROMPT}\n\nCONTEXTO RELEVANTE (base de conhecimento da Results — use pra responder com precisão, nunca invente preço/curso/política fora disso):\n${knowledgeContext}`;
+}
 
 const FALLBACK_REPLY =
   'Desculpa, tive um problema técnico aqui. Já vou repassar sua mensagem pra nossa equipe te responder, tá?';
+
+export interface RunCommercialTurnOptions {
+  /** false pro console de teste — evita alertar a Gi via WhatsApp real com dado fictício */
+  notifyHandoff?: boolean;
+}
 
 export async function runCommercialTurn(
   contact: Contact,
   instance: string,
   remoteJid: string,
   message: string,
+  options: RunCommercialTurnOptions = {},
 ): Promise<AgentTurnResult> {
   const history = await getChatHistory(instance, remoteJid);
-  const messages = buildMessages(SYSTEM_PROMPT, history, message);
+  const knowledgeContext = await retrieveKnowledgeContext(message, 'commercial');
+  const messages = buildMessages(buildSystemPrompt(knowledgeContext), history, message);
   const conversation = await getOrCreateConversation(contact.id, 'commercial');
 
   let reply: string;
@@ -62,9 +76,10 @@ export async function runCommercialTurn(
   await appendChatMessage(instance, remoteJid, { role: 'user', content: message, at: new Date().toISOString() });
   await appendChatMessage(instance, remoteJid, { role: 'assistant', content: reply, at: new Date().toISOString() });
 
-  if (shouldHandoff(leadScore)) {
+  const handoff = shouldHandoff(leadScore);
+  if (handoff && options.notifyHandoff !== false) {
     await handoffToGi(contact.id, contact.phone, reply);
   }
 
-  return { reply, leadScore };
+  return { reply, leadScore, handoff };
 }

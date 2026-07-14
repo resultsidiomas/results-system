@@ -7,4 +7,5 @@ export interface ChatMessage {
 export interface AgentTurnResult {
   reply: string;
   leadScore: number;
+  handoff: boolean;
 }

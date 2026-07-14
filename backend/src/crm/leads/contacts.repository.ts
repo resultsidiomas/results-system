@@ -27,3 +27,14 @@ export async function findOrCreateContact(phone: string, name: string): Promise<
   if (createError) throw createError;
   return created as Contact;
 }
+
+export async function findContactByPhone(phone: string): Promise<Contact | null> {
+  const { data, error } = await supabase.from('contacts').select('*').eq('phone', phone).maybeSingle();
+  if (error) throw error;
+  return data as Contact | null;
+}
+
+export async function deleteContact(id: string): Promise<void> {
+  const { error } = await supabase.from('contacts').delete().eq('id', id);
+  if (error) throw error;
+}

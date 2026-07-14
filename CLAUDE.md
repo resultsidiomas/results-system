@@ -290,25 +290,31 @@ results-idiomas/
 │   ├── CHANGELOG.md
 │   ├── DECISIONS.md           ← ADRs
 │   └── decisions/             ← ADR individuais (ADR-001.md, ...)
-├── agents/
-│   ├── commercial/            ← M1
-│   │   ├── prompt-v1.md
-│   │   ├── knowledge-base.md
-│   │   ├── scoring-rules.md
-│   │   ├── objections.md
-│   │   └── handoff-rules.md
-│   ├── support/               ← M2
-│   │   ├── prompt-v1.md
-│   │   ├── knowledge-base.md
-│   │   ├── faq.md
-│   │   ├── rescheduling-rules.md
-│   │   └── retention-flow.md
-│   └── shared/
-│       ├── persona.md
-│       ├── school-info.md
-│       ├── courses.md
-│       └── forbidden-phrases.md
 ├── backend/
+│   ├── agents/                 ← movido pra dentro do backend (2026-07-14):
+│   │   │                         Dockerfile do EasyPanel builda com contexto
+│   │   │                         = backend/, não alcança pastas irmãs no
+│   │   │                         repo raiz — ver ADR-003
+│   │   ├── commercial/         ← M1
+│   │   │   ├── prompt-v1.md
+│   │   │   ├── knowledge-base.md
+│   │   │   ├── scoring-rules.md
+│   │   │   ├── objections.md
+│   │   │   └── handoff-rules.md
+│   │   ├── support/            ← M2
+│   │   │   ├── prompt-v1.md
+│   │   │   ├── knowledge-base.md
+│   │   │   ├── faq.md
+│   │   │   ├── rescheduling-rules.md
+│   │   │   └── retention-flow.md
+│   │   └── shared/
+│   │       ├── persona.md
+│   │       ├── school-info.md
+│   │       ├── courses.md
+│   │       └── forbidden-phrases.md
+│   ├── assets/
+│   │   └── price-table/       ← fotos da tabela de preços (envio direto,
+│   │                             agente nunca cita valor em texto)
 │   ├── src/
 │   │   ├── agents/
 │   │   ├── crm/

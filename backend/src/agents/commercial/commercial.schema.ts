@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const commercialTurnSchema = z.object({
   reply: z.string().min(1),
+  send_price_table: z.boolean(),
   collected_data: z.object({
     interested_course: z.string().nullable(),
     availability: z.string().nullable(),
@@ -22,6 +23,7 @@ export const commercialResponseJsonSchema = {
     type: 'object',
     properties: {
       reply: { type: 'string' },
+      send_price_table: { type: 'boolean' },
       collected_data: {
         type: 'object',
         properties: {
@@ -43,7 +45,7 @@ export const commercialResponseJsonSchema = {
         additionalProperties: false,
       },
     },
-    required: ['reply', 'collected_data'],
+    required: ['reply', 'send_price_table', 'collected_data'],
     additionalProperties: false,
   },
 } as const;

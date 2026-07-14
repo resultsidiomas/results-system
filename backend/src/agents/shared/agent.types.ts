@@ -8,4 +8,5 @@ export interface AgentTurnResult {
   reply: string;
   leadScore: number;
   handoff: boolean;
+  sendPriceTable: boolean;
 }

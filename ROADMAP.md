@@ -90,11 +90,11 @@ SEM 5  (8–11 jul)   ████████  Fase III — Power BI, otimizaç
 
 **Arquivos principais:**
 ```
-agents/commercial/prompt-v1.md
-agents/commercial/knowledge-base.md
-agents/commercial/scoring-rules.md
-agents/commercial/objections.md
-agents/commercial/handoff-rules.md
+backend/agents/commercial/prompt-v1.md
+backend/agents/commercial/knowledge-base.md
+backend/agents/commercial/scoring-rules.md
+backend/agents/commercial/objections.md
+backend/agents/commercial/handoff-rules.md
 backend/src/agents/commercial/
 ```
 
@@ -121,11 +121,11 @@ backend/src/agents/commercial/
 
 **Arquivos principais:**
 ```
-agents/support/prompt-v1.md
-agents/support/knowledge-base.md
-agents/support/faq.md
-agents/support/rescheduling-rules.md
-agents/support/retention-flow.md
+backend/agents/support/prompt-v1.md
+backend/agents/support/knowledge-base.md
+backend/agents/support/faq.md
+backend/agents/support/rescheduling-rules.md
+backend/agents/support/retention-flow.md
 backend/src/agents/support/
 ```
 

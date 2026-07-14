@@ -6,12 +6,12 @@ import type { KnowledgeAgentType } from '../src/knowledge/knowledge.schema.js';
 import { logger } from '../src/shared/logger.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const REPO_ROOT = resolve(__dirname, '../..');
+const BACKEND_ROOT = resolve(__dirname, '..');
 
 const AGENT_DIRS: Array<{ dir: string; agentType: KnowledgeAgentType }> = [
-  { dir: join(REPO_ROOT, 'agents/commercial'), agentType: 'commercial' },
-  { dir: join(REPO_ROOT, 'agents/support'), agentType: 'support' },
-  { dir: join(REPO_ROOT, 'agents/shared'), agentType: 'shared' },
+  { dir: join(BACKEND_ROOT, 'agents/commercial'), agentType: 'commercial' },
+  { dir: join(BACKEND_ROOT, 'agents/support'), agentType: 'support' },
+  { dir: join(BACKEND_ROOT, 'agents/shared'), agentType: 'shared' },
 ];
 
 async function run() {
@@ -34,7 +34,7 @@ async function run() {
 
     for (const file of mdFiles) {
       const filePath = join(dir, file);
-      const source = relative(REPO_ROOT, filePath).replace(/\\/g, '/');
+      const source = relative(BACKEND_ROOT, filePath).replace(/\\/g, '/');
       const count = await ingestFile(filePath, source, agentType);
       total += count;
     }

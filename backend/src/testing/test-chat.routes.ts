@@ -61,11 +61,22 @@ export async function testChatRoutes(app: FastifyInstance) {
     const contact = await findOrCreateContact(testPhone(sessionId), 'Teste (Console)');
     const turn = await runCommercialTurn(contact, TEST_INSTANCE, sessionId, parsedBody.data.message, {
       notifyHandoff: false,
+      sendImages: false,
     });
 
-    logger.info('test console turn', { sessionId, leadScore: turn.leadScore, handoff: turn.handoff });
+    logger.info('test console turn', {
+      sessionId,
+      leadScore: turn.leadScore,
+      handoff: turn.handoff,
+      sendPriceTable: turn.sendPriceTable,
+    });
 
-    return reply.send({ reply: turn.reply, leadScore: turn.leadScore, handoff: turn.handoff });
+    return reply.send({
+      reply: turn.reply,
+      leadScore: turn.leadScore,
+      handoff: turn.handoff,
+      sendPriceTable: turn.sendPriceTable,
+    });
   });
 
   app.delete('/api/v1/test-chat/:sessionId', async (request: FastifyRequest, reply: FastifyReply) => {

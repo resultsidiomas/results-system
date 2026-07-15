@@ -4,6 +4,7 @@ import corsPlugin from './src/plugins/cors.plugin.js';
 import errorHandlerPlugin from './src/plugins/error-handler.plugin.js';
 import { uazapiWebhookRoute } from './src/whatsapp/uazapi/uazapi.webhook.js';
 import { testChatRoutes } from './src/testing/test-chat.routes.js';
+import { n8nAgentRoutes } from './src/integrations/n8n-agent/n8n-agent.routes.js';
 import { logger } from './src/shared/logger.js';
 
 const app = Fastify({ logger: false });
@@ -12,6 +13,7 @@ await app.register(corsPlugin);
 await app.register(errorHandlerPlugin);
 await app.register(uazapiWebhookRoute);
 await app.register(testChatRoutes);
+await app.register(n8nAgentRoutes);
 
 app.get('/health', async () => ({ status: 'ok' }));
 

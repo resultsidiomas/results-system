@@ -46,6 +46,9 @@ const envSchema = z.object({
   // Console de teste do agente (frontend interno, sem WhatsApp real)
   TEST_CONSOLE_TOKEN: z.string().min(1),
 
+  // Endpoint /api/v1/n8n-agent/run — token que o n8n manda no header x-internal-key
+  INTERNAL_API_KEY: z.string().min(1),
+
   // Allowlist temporária de teste (M1 em validação) — lista de wa_chatid
   // separados por vírgula; se definida, webhook só responde a esses números.
   // Vazio/ausente = responde a todos (comportamento normal de produção).

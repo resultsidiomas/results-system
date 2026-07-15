@@ -9,6 +9,16 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-15] - Infra: caminho de decisao e split visiveis no workflow n8n
+
+O que: reestruturado o trecho final do workflow n8n `Agente - Entrada via Webhook` pra deixar visivel no desenho o que antes ficava escondido dentro de um Code node so. Novo node IF `IA Decidiu Responder?` logo apos `Chamar Agente` — reply vazio (pausado sem duvida, ver ADR-011) vai pro `Ignorar - Pausado Sem Duvida` (NoOp), reply preenchido segue pro envio. `Quebrar Resposta em Blocos` (Code) agora so calcula o array de blocos; um node `Dividir em Itens` (Split Out nativo do n8n, nao mais dentro do Code) transforma esse array em varios items pro `Loop Blocos` processar. Delay aleatorio 3000-5500ms calculado direto na expressao do `Aguardar Delay Digitacao` e do `delay` da UAZAPI (sem campo intermediario).
+
+Por que: usuario testou e nao conseguia ver no canvas nem o split nem a decisao de responder/ficar em silencio — pediu pra isso ficar visivel no fluxo, nao so implicito no comportamento.
+
+Arquivos: nenhum arquivo do repo — workflow alterado via `PUT /api/v1/workflows/:id` (nao versionado). Backend (`n8n-agent.routes.ts`, `commercial.reactivation.ts`) nao mudou — mesma logica da entrada anterior, so o desenho do n8n ficou mais explicito.
+
+Impacto: confirmado visualmente na aba logada do usuario apos aplicar (`versionCounter: 39`, 21 nodes). Classificacao duvida/encerrado continua no backend (OpenAI via `commercial.reactivation.ts`), nao virou node solto no n8n — decisao deliberada pra manter o prompt versionado/testavel (ver ADR-010/011); so o *caminho* que reage a decisao ficou visivel.
+
 ## [2026-07-15] - M1: reativacao sob demanda durante pausar_ia + split de blocos mais robusto (ADR-011)
 
 O que: (1) `n8n-agent.routes.ts` — quando `contact.pausar_ia==='Sim'`, classifica a mensagem recebida (`commercial.reactivation.ts`, novo, mesmo padrao do `intent.classifier.ts`) entre "duvida" (precisa resposta) e "encerrado" (agradecimento/sem conteudo). Se for duvida, roda `runCommercialTurn` com `notifyHandoff:false` (nunca reabre alerta pra Gi nem deixa o score re-disparar handoff sozinho) e devolve o contato pro estado pausado logo depois (`updatePausarIa`) — a proxima mensagem passa pela mesma checagem. Se for encerramento, fica em silencio. Endpoint agora sempre retorna `pausarIa: 'Sim'|'Nao'` (antes so retornava null sem essa info). (2) Code node `Quebrar Resposta em Blocos` no n8n: split por `\n` sozinho quase nunca fracionava (o modelo raramente usa quebra de linha literal no JSON) — trocado por split por paragrafo + frase, agrupando ate ~140 caracteres por bolha, garantindo multiplos itens de verdade pro Loop Blocos processar (delay aleatorio 3000-5500ms por bolha, como antes).

@@ -14,6 +14,7 @@ import type { PriceTableVariant } from './commercial.schema.js';
 import { scoreLead, shouldHandoff } from './commercial.scoring.js';
 import { handoffToGi } from './commercial.handoff.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
+import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PROMPT_PATH = resolve(__dirname, '../../../../agents/commercial/prompt-v1.md');
@@ -65,7 +66,7 @@ export async function runCommercialTurn(
 
     const messageCount = conversation.messages.length + 2;
     leadScore = scoreLead(turn.collected_data, messageCount);
-    reply = turn.reply;
+    reply = sanitizeOutgoingText(turn.reply);
     sendPriceTable = turn.send_price_table;
     priceTableVariant = turn.price_table_variant;
 

@@ -10,16 +10,12 @@ interface PriceTableImage {
   mimeType: string;
 }
 
-// tabela-01 = visao geral (12m + 6m + sem fidelizacao juntos, mesmo dado
-// dos outros 3, so que numa imagem so) — usada quando o lead ainda nao
-// falou qual duracao de plano prefere. tabela-02/03/04 = cartao isolado de
-// cada plano, usado quando o lead ja deixou claro a preferencia.
-const FILE_BY_VARIANT: Record<PriceTableVariant, string> = {
-  geral: 'tabela-01.jpeg',
-  sem_fidelizacao: 'tabela-02.jpeg',
-  '6_meses': 'tabela-03.jpeg',
-  '12_meses': 'tabela-04.jpeg',
-};
+// Sempre manda tabela-01 (visao geral: 12m + 6m + sem fidelizacao, particular
+// e turma, tudo junto numa imagem so) — nunca as variantes por plano
+// isolado (tabela-02/03/04), mesmo que o parametro `variant` peca outra
+// coisa. Decisao: uma unica foto com todos os valores em vez de mandar
+// varias fotos por turno.
+const GERAL_FILE = 'tabela-01.jpeg';
 
 const cache = new Map<string, PriceTableImage>();
 
@@ -27,8 +23,8 @@ function mimeTypeFor(fileName: string): string {
   return fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
 }
 
-export function getPriceTableImage(variant: PriceTableVariant): PriceTableImage {
-  const fileName = FILE_BY_VARIANT[variant] ?? FILE_BY_VARIANT.geral;
+export function getPriceTableImage(_variant: PriceTableVariant): PriceTableImage {
+  const fileName = GERAL_FILE;
 
   const cached = cache.get(fileName);
   if (cached) return cached;

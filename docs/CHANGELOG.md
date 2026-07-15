@@ -9,6 +9,16 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-15] - Infra: corrigido webhook n8n -> agente (host errado + payload incompativel)
+
+O que: workflow n8n `Agente - Entrada via Webhook` (id `qlkBgS35XBuSysN8`) estava com 100% das execucoes falhando com `ENOTFOUND` no node "Chamar Agente". Corrigido via API do n8n (sem acesso ao editor visual): (1) URL do HTTP Request node trocada de `http://drop-agency_results-backend:3000/...` (hostname interno errado, projeto/servico mudou de nome no EasyPanel) para `http://results_results-backend:3000/api/v1/n8n-agent/run` (nome real confirmado pelo usuario). (2) `jsonBody` reescrito — mandava o objeto `message` inteiro do payload da uazapiGO-Webhook, mas `POST /api/v1/n8n-agent/run` exige `message` como string (zod `bodySchema`); ia quebrar com 400 mesmo com host certo. Agora extrai `message.content`/`message.text`, usa `message.chatid` como `sessionId`, e monta `contexto` com `senderName`/`chatName`/`instanceName`/`eventType`/`messageType`.
+
+Por que: usuario reportou webhook ativando mas o HTTP Request node falhando com "The connection cannot be established". Investigacao (executions da API do n8n) confirmou `getaddrinfo ENOTFOUND drop-agency_results-backend` — hostname de uma nomenclatura de projeto EasyPanel antiga (`drop-agency`), divergente da atual (`results`).
+
+Arquivos: nenhum arquivo do repo — mudanca aplicada direto no workflow via `PUT /api/v1/workflows/:id` da API do n8n (workflow nao versionado no repo).
+
+Impacto: n8n -> backend confirmado ponta-a-ponta (host resolve, zod passa, chega em `getChatHistory`). Erro seguinte era `MaxRetriesPerRequestError` do ioredis no backend — `REDIS_URL` desatualizada (mesmo problema de nomenclatura antiga). Usuario corrigiu `REDIS_URL` no `.env`/EasyPanel; este commit e so pra disparar o redeploy do backend na VPS e validar o Redis com a env nova.
+
 ## [2026-07-14] - M1: RAG ativo no Supabase real + webhook por query string
 O que: migration `20260713000001_knowledge_vector_store.sql` aplicada no Supabase real (SQL Editor, em 2 partes por causa de corte no copy/paste). `npm run ingest:knowledge` rodado — 30 chunks (commercial: 19, shared: 11; support vazio, M2 não iniciado). Retrieval testado ponta-a-ponta contra o Supabase real (`retrieveKnowledgeContext` retornou contexto de preço de verdade). Webhook agora aceita o secret via `?token=` na URL, não só header — painel da UAZAPI só tem campo de URL simples, sem header customizado.
 Por que: painel real da UAZAPI não suporta header customizado (só descoberto testando de verdade); RAG era o último bloqueador pro agente responder preço/curso com precisão.

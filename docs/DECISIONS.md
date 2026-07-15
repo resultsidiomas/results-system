@@ -12,5 +12,6 @@
 | ADR-008 | Modelo: OpenAI gpt-4.1-mini (agentes + roteador) | Aceito |
 | ADR-009 | Vector store da base de conhecimento (RAG) | Aceito |
 | ADR-010 | n8n passa a chamar a engine completa do agente comercial | Aceito |
+| ADR-011 | Reativação da IA durante pausar_ia='Sim' | Aceito |
 
 Ver arquivos em docs/decisions/

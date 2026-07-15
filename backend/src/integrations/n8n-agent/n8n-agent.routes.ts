@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { HttpError, BadRequestError, UnauthorizedError } from '../../shared/http-errors.js';
-import { findOrCreateContact } from '../../crm/leads/contacts.repository.js';
+import { findOrCreateContact, updatePausarIa } from '../../crm/leads/contacts.repository.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
+import { shouldReactivate } from '../../agents/commercial/commercial.reactivation.js';
 
 const bodySchema = z.object({
   message: z.string().min(1),
@@ -47,14 +48,35 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
       throw new HttpError(502, 'falha ao identificar contato');
     }
 
-    if (contact.pausar_ia === 'Sim') {
-      return reply.send({ reply: null, sendPriceTable: false, sessionId, reason: 'pausar_ia' });
-    }
-
     // Sem roteador M1/M2 aqui: agente de suporte (M2) ainda não existe
     // (ADR-010) — sempre responde via engine comercial.
-    const turn = await runCommercialTurn(contact, instanceName, remoteJid, message);
 
-    return reply.send({ reply: turn.reply, sendPriceTable: turn.sendPriceTable, sessionId });
+    if (contact.pausar_ia === 'Sim') {
+      // Handoff já aconteceu (Gi está com o lead). Só volta a falar se a
+      // mensagem for uma dúvida real — nunca reabre o score/handoff de
+      // novo (notifyHandoff:false) pra não reencaminhar/alertar a Gi de
+      // novo pela mesma coisa. Depois de responder, volta pra pausado —
+      // a próxima mensagem passa pela mesma checagem (ver ADR-011).
+      const wantsToContinue = await shouldReactivate(message);
+      if (!wantsToContinue) {
+        return reply.send({ reply: null, sendPriceTable: false, sessionId, pausarIa: 'Sim' });
+      }
+
+      const turn = await runCommercialTurn(
+        { ...contact, pausar_ia: 'Não' },
+        instanceName,
+        remoteJid,
+        message,
+        { notifyHandoff: false },
+      );
+      await updatePausarIa(contact.id, 'Sim');
+
+      return reply.send({ reply: turn.reply, sendPriceTable: turn.sendPriceTable, sessionId, pausarIa: 'Sim' });
+    }
+
+    const turn = await runCommercialTurn(contact, instanceName, remoteJid, message);
+    const pausarIa = turn.handoff ? 'Sim' : 'Não';
+
+    return reply.send({ reply: turn.reply, sendPriceTable: turn.sendPriceTable, sessionId, pausarIa });
   });
 }

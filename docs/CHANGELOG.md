@@ -9,6 +9,16 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-15] - M1: reativacao sob demanda durante pausar_ia + split de blocos mais robusto (ADR-011)
+
+O que: (1) `n8n-agent.routes.ts` — quando `contact.pausar_ia==='Sim'`, classifica a mensagem recebida (`commercial.reactivation.ts`, novo, mesmo padrao do `intent.classifier.ts`) entre "duvida" (precisa resposta) e "encerrado" (agradecimento/sem conteudo). Se for duvida, roda `runCommercialTurn` com `notifyHandoff:false` (nunca reabre alerta pra Gi nem deixa o score re-disparar handoff sozinho) e devolve o contato pro estado pausado logo depois (`updatePausarIa`) — a proxima mensagem passa pela mesma checagem. Se for encerramento, fica em silencio. Endpoint agora sempre retorna `pausarIa: 'Sim'|'Nao'` (antes so retornava null sem essa info). (2) Code node `Quebrar Resposta em Blocos` no n8n: split por `\n` sozinho quase nunca fracionava (o modelo raramente usa quebra de linha literal no JSON) — trocado por split por paragrafo + frase, agrupando ate ~140 caracteres por bolha, garantindo multiplos itens de verdade pro Loop Blocos processar (delay aleatorio 3000-5500ms por bolha, como antes).
+
+Por que: usuario reportou que a IA ficava muda pra sempre apos handoff mesmo quando o lead mandava duvida real (so reativa no reset diario das 08:00), e que as respostas continuavam saindo num bloco so mesmo com o fracionamento anterior (o `\n` do Code node antigo dependia do modelo formatar assim, o que raramente acontece). Pediu que a IA analise se vale reativar, sempre educada, e so pause de vez quando entender que nao ha mais duvida.
+
+Arquivos: backend/src/agents/commercial/commercial.reactivation.ts (novo), backend/src/crm/leads/contacts.repository.ts (`updatePausarIa`), backend/src/integrations/n8n-agent/n8n-agent.routes.ts, docs/decisions/ADR-011-pausar-ia-reactivation.md (novo), docs/DECISIONS.md. Code node do n8n alterado via `PUT /api/v1/workflows/:id` (nao versionado no repo).
+
+Impacto: typecheck limpo. Risco identificado e mitigado no ADR-011 — reativar sem cuidado reabriria o alerta de handoff pra Gi em toda mensagem seguinte (score fica >=7 permanentemente uma vez atingido); `notifyHandoff:false` + volta automatica pra `pausar_ia='Sim'` evita isso sem precisar de migration nova. Nao testado ainda contra WhatsApp real (pendente enviar mensagem de teste pra um contato com `pausar_ia='Sim'`, tanto com duvida real quanto so agradecimento, pra confirmar os dois caminhos).
+
 ## [2026-07-15] - Fix: n8n mandava mensagem vazia pra UAZAPI quando IA estava pausada
 
 O que: Code node `Quebrar Resposta em Blocos` (adicionado na entrada anterior deste changelog) nao tratava `reply: null` — quando o backend responde `{reply: null, reason: 'pausar_ia'}` (contato com humano assumido), o `|| ''` do node convertia pra texto vazio e ainda assim montava um item pra enviar, gerando `POST /send/text` com `text: ""`. Corrigido com guarda `if (!reply) return [];` logo no inicio do Code node — sem reply, o loop de envio nao roda, sem tentativa de POST.

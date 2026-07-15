@@ -38,3 +38,8 @@ export async function deleteContact(id: string): Promise<void> {
   const { error } = await supabase.from('contacts').delete().eq('id', id);
   if (error) throw error;
 }
+
+export async function updatePausarIa(id: string, value: 'Sim' | 'Não'): Promise<void> {
+  const { error } = await supabase.from('contacts').update({ pausar_ia: value }).eq('id', id);
+  if (error) throw error;
+}

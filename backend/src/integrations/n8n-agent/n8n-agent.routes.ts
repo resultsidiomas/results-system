@@ -6,11 +6,18 @@ import { HttpError, BadRequestError, UnauthorizedError } from '../../shared/http
 import { findOrCreateContact, updatePausarIa } from '../../crm/leads/contacts.repository.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
 import { shouldReactivate } from '../../agents/commercial/commercial.reactivation.js';
+import { sendPriceTableImage } from '../../whatsapp/uazapi/uazapi.sender.js';
+import { PRICE_TABLE_VARIANTS } from '../../agents/commercial/commercial.schema.js';
 
 const bodySchema = z.object({
   message: z.string().min(1),
   sessionId: z.string().min(1),
   contexto: z.record(z.string(), z.unknown()).optional(),
+});
+
+const sendPriceTableBodySchema = z.object({
+  sessionId: z.string().min(1),
+  variant: z.enum(PRICE_TABLE_VARIANTS).default('geral'),
 });
 
 function requireInternalAuth(request: FastifyRequest): void {
@@ -59,7 +66,13 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
       // a próxima mensagem passa pela mesma checagem (ver ADR-011).
       const wantsToContinue = await shouldReactivate(message);
       if (!wantsToContinue) {
-        return reply.send({ reply: null, sendPriceTable: false, sessionId, pausarIa: 'Sim' });
+        return reply.send({
+          reply: null,
+          sendPriceTable: false,
+          priceTableVariant: null,
+          sessionId,
+          pausarIa: 'Sim',
+        });
       }
 
       const turn = await runCommercialTurn(
@@ -71,12 +84,45 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
       );
       await updatePausarIa(contact.id, 'Sim');
 
-      return reply.send({ reply: turn.reply, sendPriceTable: turn.sendPriceTable, sessionId, pausarIa: 'Sim' });
+      return reply.send({
+        reply: turn.reply,
+        sendPriceTable: turn.sendPriceTable,
+        priceTableVariant: turn.sendPriceTable ? turn.priceTableVariant : null,
+        sessionId,
+        pausarIa: 'Sim',
+      });
     }
 
     const turn = await runCommercialTurn(contact, instanceName, remoteJid, message);
     const pausarIa = turn.handoff ? 'Sim' : 'Não';
 
-    return reply.send({ reply: turn.reply, sendPriceTable: turn.sendPriceTable, sessionId, pausarIa });
+    return reply.send({
+      reply: turn.reply,
+      sendPriceTable: turn.sendPriceTable,
+      priceTableVariant: turn.sendPriceTable ? turn.priceTableVariant : null,
+      sessionId,
+      pausarIa,
+    });
+  });
+
+  // Chamado pelo n8n só DEPOIS que todos os blocos de texto já foram
+  // enviados (loop de fracionamento) — garante que a tabela chega depois
+  // do "vou te mandar a tabela", nunca antes (ADR-012).
+  app.post('/api/v1/n8n-agent/send-price-table', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireInternalAuth(request);
+
+    const parsed = sendPriceTableBodySchema.safeParse(request.body);
+    if (!parsed.success) throw new BadRequestError('invalid request body');
+
+    const { sessionId, variant } = parsed.data;
+
+    try {
+      await sendPriceTableImage(sessionId, variant);
+    } catch (err) {
+      logger.error('n8n-agent send-price-table failed', { sessionId, errorMessage: (err as Error).message });
+      throw new HttpError(502, 'falha ao enviar tabela de precos');
+    }
+
+    return reply.send({ status: 'ok' });
   });
 }

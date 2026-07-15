@@ -1,8 +1,12 @@
 import { z } from 'zod';
 
+export const PRICE_TABLE_VARIANTS = ['geral', '12_meses', '6_meses', 'sem_fidelizacao'] as const;
+export type PriceTableVariant = (typeof PRICE_TABLE_VARIANTS)[number];
+
 export const commercialTurnSchema = z.object({
   reply: z.string().min(1),
   send_price_table: z.boolean(),
+  price_table_variant: z.enum(PRICE_TABLE_VARIANTS),
   collected_data: z.object({
     interested_course: z.string().nullable(),
     availability: z.string().nullable(),
@@ -24,6 +28,7 @@ export const commercialResponseJsonSchema = {
     properties: {
       reply: { type: 'string' },
       send_price_table: { type: 'boolean' },
+      price_table_variant: { type: 'string', enum: PRICE_TABLE_VARIANTS },
       collected_data: {
         type: 'object',
         properties: {
@@ -45,7 +50,7 @@ export const commercialResponseJsonSchema = {
         additionalProperties: false,
       },
     },
-    required: ['reply', 'send_price_table', 'collected_data'],
+    required: ['reply', 'send_price_table', 'price_table_variant', 'collected_data'],
     additionalProperties: false,
   },
 } as const;

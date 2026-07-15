@@ -1,7 +1,8 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { fractureMessage } from '../../agents/shared/agent.fracture.js';
-import { getPriceTableImages } from './price-table.assets.js';
+import { getPriceTableImage } from './price-table.assets.js';
+import type { PriceTableVariant } from '../../agents/commercial/commercial.schema.js';
 
 export async function sendText(remoteJid: string, text: string): Promise<void> {
   const res = await fetch(`${env.UAZAPI_URL}/send/text`, {
@@ -48,15 +49,13 @@ async function sendImage(remoteJid: string, base64: string, mimeType: string, ca
 }
 
 /**
- * Envia as fotos da tabela de preços em vez do agente citar valor em texto —
- * elimina risco de o LLM inventar/errar número (ver ADR sobre política de preço).
- * Endpoint /send/media segue convenção não 100% confirmada contra doc oficial
- * da UAZAPI (doc é SPA, não indexável) — validar no primeiro teste real.
+ * Envia a foto da tabela de preços (só a variante certa pro que o lead
+ * pediu) em vez do agente citar valor em texto — elimina risco de o LLM
+ * inventar/errar número (ver ADR sobre política de preço). Endpoint
+ * /send/media segue convenção não 100% confirmada contra doc oficial da
+ * UAZAPI (doc é SPA, não indexável) — validado no primeiro teste real.
  */
-export async function sendPriceTableImages(remoteJid: string): Promise<void> {
-  const images = getPriceTableImages();
-  for (const [index, image] of images.entries()) {
-    const caption = index === 0 ? 'Aqui está nossa tabela de valores 😊' : '';
-    await sendImage(remoteJid, image.base64, image.mimeType, caption);
-  }
+export async function sendPriceTableImage(remoteJid: string, variant: PriceTableVariant): Promise<void> {
+  const image = getPriceTableImage(variant);
+  await sendImage(remoteJid, image.base64, image.mimeType, 'Aqui está nossa tabela de valores 😊');
 }

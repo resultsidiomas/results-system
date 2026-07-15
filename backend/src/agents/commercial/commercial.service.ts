@@ -10,10 +10,10 @@ import { getChatHistory, appendChatMessage } from '../shared/agent.memory.redis.
 import { getOrCreateConversation, appendConversationTurn } from '../shared/agent.memory.pg.js';
 import { buildMessages } from '../shared/agent.context.js';
 import { commercialTurnSchema, commercialResponseJsonSchema } from './commercial.schema.js';
+import type { PriceTableVariant } from './commercial.schema.js';
 import { scoreLead, shouldHandoff } from './commercial.scoring.js';
 import { handoffToGi } from './commercial.handoff.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
-import { sendPriceTableImages } from '../../whatsapp/uazapi/uazapi.sender.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PROMPT_PATH = resolve(__dirname, '../../../../agents/commercial/prompt-v1.md');
@@ -30,8 +30,6 @@ const FALLBACK_REPLY =
 export interface RunCommercialTurnOptions {
   /** false pro console de teste — evita alertar a Gi via WhatsApp real com dado fictício */
   notifyHandoff?: boolean;
-  /** false pro console de teste — evita mandar imagem via UAZAPI pra um número que não existe */
-  sendImages?: boolean;
 }
 
 export async function runCommercialTurn(
@@ -49,6 +47,7 @@ export async function runCommercialTurn(
   let reply: string;
   let leadScore: number;
   let sendPriceTable = false;
+  let priceTableVariant: PriceTableVariant = 'geral';
 
   try {
     const completion = await openai.chat.completions.create({
@@ -68,6 +67,7 @@ export async function runCommercialTurn(
     leadScore = scoreLead(turn.collected_data, messageCount);
     reply = turn.reply;
     sendPriceTable = turn.send_price_table;
+    priceTableVariant = turn.price_table_variant;
 
     await appendConversationTurn(conversation, message, reply, leadScore, turn.collected_data);
   } catch (err) {
@@ -81,18 +81,12 @@ export async function runCommercialTurn(
   await appendChatMessage(instance, remoteJid, { role: 'user', content: message, at: new Date().toISOString() });
   await appendChatMessage(instance, remoteJid, { role: 'assistant', content: reply, at: new Date().toISOString() });
 
-  if (sendPriceTable && options.sendImages !== false) {
-    try {
-      await sendPriceTableImages(remoteJid);
-    } catch (err) {
-      logger.error('failed to send price table images', { errorMessage: (err as Error).message });
-    }
-  }
-
   const handoff = shouldHandoff(leadScore);
   if (handoff && options.notifyHandoff !== false) {
     await handoffToGi(contact.id, contact.phone, reply);
   }
 
-  return { reply, leadScore, handoff, sendPriceTable };
+  // Quem chama decide QUANDO entregar a tabela (imagem só pode ir depois do
+  // texto ter sido enviado de verdade — ver ADR-012). Esta função só sinaliza.
+  return { reply, leadScore, handoff, sendPriceTable, priceTableVariant };
 }

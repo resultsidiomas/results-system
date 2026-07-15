@@ -61,7 +61,6 @@ export async function testChatRoutes(app: FastifyInstance) {
     const contact = await findOrCreateContact(testPhone(sessionId), 'Teste (Console)');
     const turn = await runCommercialTurn(contact, TEST_INSTANCE, sessionId, parsedBody.data.message, {
       notifyHandoff: false,
-      sendImages: false,
     });
 
     logger.info('test console turn', {

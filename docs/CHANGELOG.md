@@ -9,6 +9,16 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-15] - M1: ordem texto->tabela garantida + tabela por variante de plano (ADR-012)
+
+O que: (1) `commercial.service.ts` nao manda mais a imagem da tabela sozinho (sincrono, antes do texto sair) — so sinaliza `sendPriceTable`/`priceTableVariant`, quem decide QUANDO entregar e o consumidor. (2) `n8n-agent.routes.ts`: Code node `Quebrar Resposta em Blocos` agora monta uma fila unica — blocos de texto primeiro, tabela de precos (se houver) como ultimo item da mesma fila (`kind:'text'|'price_table'`), processada em ordem pelo `Loop Blocos`. Novo IF `Bloco E Texto?` decide, dentro do loop, entre mandar texto direto pra UAZAPI ou chamar o novo endpoint `POST /api/v1/n8n-agent/send-price-table`. (3) `price-table.assets.ts`: `getPriceTableImages()` (mandava as 4 imagens sempre juntas) virou `getPriceTableImage(variant)` — so a tabela certa. `commercial.schema.ts` ganhou `price_table_variant` (`geral`|`12_meses`|`6_meses`|`sem_fidelizacao`), o modelo escolhe com base no que o lead ja falou sobre duracao de plano (prompt-v1.md atualizado). (4) `uazapi.webhook.ts` (caminho antigo, sem trafego real) tambem corrigido pra mandar texto antes da imagem, mesma causa raiz.
+
+Por que: usuario reportou execucao real onde a foto da tabela chegou ANTES do agente dizer "vou te mandar a tabela" — confuso. Causa: envio de imagem sincrono no backend sempre vencia a corrida contra o texto (que sai via loop com delay proposital no n8n). Pediu tambem que so a tabela adequada ao que o cliente busca seja enviada, nao as 4 juntas.
+
+Arquivos: backend/src/agents/commercial/commercial.service.ts, commercial.schema.ts, backend/src/agents/shared/agent.types.ts, backend/src/whatsapp/uazapi/price-table.assets.ts, uazapi.sender.ts, uazapi.webhook.ts, backend/src/integrations/n8n-agent/n8n-agent.routes.ts (endpoint novo), backend/src/testing/test-chat.routes.ts (opcao `sendImages` removida, nao existe mais), backend/agents/commercial/prompt-v1.md, docs/decisions/ADR-012-price-table-ordering-variant.md (novo), docs/DECISIONS.md. Workflow n8n alterado via API (nao versionado).
+
+Impacto: typecheck limpo. Ordem agora garantida por fila (nao por timing) — tabela so processa depois de todos os blocos de texto, sempre, independente de latencia de rede. Nao testado ainda contra WhatsApp real (pendente confirmar as 4 variantes de tabela e a ordem numa conversa de verdade).
+
 ## [2026-07-15] - Infra: caminho de decisao e split visiveis no workflow n8n
 
 O que: reestruturado o trecho final do workflow n8n `Agente - Entrada via Webhook` pra deixar visivel no desenho o que antes ficava escondido dentro de um Code node so. Novo node IF `IA Decidiu Responder?` logo apos `Chamar Agente` — reply vazio (pausado sem duvida, ver ADR-011) vai pro `Ignorar - Pausado Sem Duvida` (NoOp), reply preenchido segue pro envio. `Quebrar Resposta em Blocos` (Code) agora so calcula o array de blocos; um node `Dividir em Itens` (Split Out nativo do n8n, nao mais dentro do Code) transforma esse array em varios items pro `Loop Blocos` processar. Delay aleatorio 3000-5500ms calculado direto na expressao do `Aguardar Delay Digitacao` e do `delay` da UAZAPI (sem campo intermediario).

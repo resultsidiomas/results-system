@@ -9,7 +9,7 @@ import { appendChatMessage } from '../../agents/shared/agent.memory.redis.js';
 import { joinMessages } from '../../agents/shared/agent.message-join.js';
 import { routeAgent } from '../../agents/router/agent.router.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
-import { sendFractured } from './uazapi.sender.js';
+import { sendFractured, sendPriceTableImage } from './uazapi.sender.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { UnauthorizedError, BadRequestError } from '../../shared/http-errors.js';
@@ -112,6 +112,10 @@ export async function uazapiWebhookRoute(app: FastifyInstance) {
     if (agentType === 'commercial') {
       const turn = await runCommercialTurn(contact, instanceName, remoteJid, joined);
       await sendFractured(remoteJid, turn.reply);
+      // Tabela só depois do texto ter saído de verdade — nunca antes (ADR-012).
+      if (turn.sendPriceTable) {
+        await sendPriceTableImage(remoteJid, turn.priceTableVariant);
+      }
       return reply.status(200).send({ status: 'ok', agentType, leadScore: turn.leadScore });
     }
 

@@ -1,3 +1,5 @@
+import type { PriceTableVariant } from '../commercial/commercial.schema.js';
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -9,4 +11,5 @@ export interface AgentTurnResult {
   leadScore: number;
   handoff: boolean;
   sendPriceTable: boolean;
+  priceTableVariant: PriceTableVariant;
 }

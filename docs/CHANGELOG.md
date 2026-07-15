@@ -9,6 +9,16 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-15] - Fix: n8n mandava mensagem vazia pra UAZAPI quando IA estava pausada
+
+O que: Code node `Quebrar Resposta em Blocos` (adicionado na entrada anterior deste changelog) nao tratava `reply: null` — quando o backend responde `{reply: null, reason: 'pausar_ia'}` (contato com humano assumido), o `|| ''` do node convertia pra texto vazio e ainda assim montava um item pra enviar, gerando `POST /send/text` com `text: ""`. Corrigido com guarda `if (!reply) return [];` logo no inicio do Code node — sem reply, o loop de envio nao roda, sem tentativa de POST.
+
+Por que: usuario testou em producao (numero `5511994800080`, que estava com `pausar_ia='Sim'` no Supabase) e a execucao 69 do workflow deu erro `400 Missing required fields` na UAZAPI. Investigado via `GET /api/v1/executions/69?includeData=true` — confirmado que o erro era exatamente esse caso de borda, isolado (execucoes 60-68, todas com reply nao-vazio, rodaram com sucesso).
+
+Arquivos: nenhum arquivo do repo — Code node do workflow n8n corrigido via `PUT /api/v1/workflows/:id`.
+
+Impacto: confirmado em producao (execucao 68) que o fracionamento + delay aleatorio (3000-5500ms) e a nova regra de prompt (redirecionar quando perguntam antes de qualificar: resposta real observada — "Boa pergunta! Quero entender melhor o que voce busca para indicar a opcao certa...") ja estao funcionando como desenhado no ADR-010. Guard de `pausar_ia` (IA em silencio quando humano assumiu) agora nao gera mais erro na UAZAPI.
+
 ## [2026-07-15] - M1: n8n religado a engine completa + fracionamento de blocos + qualificacao mais proativa (ADR-010)
 
 O que: (1) `n8n-agent.routes.ts` reescrito — antes chamava `openai.chat.completions.create` cru, sem persona/RAG/regras; agora faz `findOrCreateContact` (Supabase), checa `pausar_ia` e chama `runCommercialTurn` (engine completa: `prompt-v1.md`, RAG, scoring, `send_price_table`, envio de imagem da tabela de precos direto do backend). (2) `prompt-v1.md`/`persona.md`/`forbidden-phrases.md`: mensagens curtas concretas (1-2 frases por bolha), proibicao de perguntas de oferta ("gostaria que eu...", "quer que eu...") fora dos dois momentos de acao (convite pra aula experimental, oferecer especialista — sempre no fim da qualificacao), redirecionamento quando preco e perguntado antes da qualificacao minima, mais detalhe ao apresentar opcoes, e regra critica reforcada contra declarar preco/fato nao confirmado. (3) Workflow n8n `Agente - Entrada via Webhook` (via API): allowlist do node `Filtro Numero Teste` ganhou 3 wa_chatid novos (`5511989869931`, `5511956094941`, `5511982048303`, `@s.whatsapp.net`, mantendo o existente); novo Code node `Quebrar Resposta em Blocos` quebra o `reply` por linha e injeta um delay aleatorio 3000-5500ms por bloco; `Loop Blocos` (splitInBatches) + `Aguardar Delay Digitacao` (Wait) processam um bloco por vez antes de cada `POST /send/text`, substituindo o envio unico com delay fixo de 3000ms.

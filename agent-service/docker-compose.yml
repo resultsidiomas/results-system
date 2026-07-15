@@ -1,0 +1,20 @@
+services:
+  agent-service:
+    build: .
+    container_name: agent-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    networks:
+      - n8n_network
+
+networks:
+  n8n_network:
+    # No EasyPanel (projeto "drop-agency"), o hostname interno de cada servico
+    # segue o padrao <projeto>_<servico> (confirmado no Redis: drop-agency_redis_results).
+    # Este compose.yml serve para rodar local/teste; no EasyPanel o deploy real
+    # e feito criando o servico direto no painel (ver README-integracao.md).
+    external: true
+    name: n8n_network

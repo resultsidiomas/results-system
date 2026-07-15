@@ -1,0 +1,20 @@
+{
+  "name": "agent-service",
+  "version": "1.0.0",
+  "description": "Servico HTTP standalone que expoe um agente OpenAI para o n8n consumir via rede interna Docker",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "openai": "^4",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

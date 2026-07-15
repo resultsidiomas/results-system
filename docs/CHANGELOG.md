@@ -9,6 +9,16 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-15] - M1: mais um numero de teste liberado no workflow n8n
+
+O que: node `Filtro Numero Teste` do workflow `Agente - Entrada via Webhook` (`qlkBgS35XBuSysN8`) ganhou `5541987490574@s.whatsapp.net` na allowlist, via `PUT /api/v1/workflows/:id`.
+
+Por que: usuario pediu pra liberar resposta pra esse numero tambem.
+
+Arquivos: nenhum arquivo do repo — allowlist nao e versionada, so existe no workflow (mesma limitacao das entradas anteriores).
+
+Impacto: confirmado (`versionCounter: 45`). Allowlist agora com 6 numeros de teste.
+
 ## [2026-07-15] - M1: tabela unica (geral) + pergunta particular/turma antes de mandar + fix numero teste + sanitize \n
 
 O que: (1) `price-table.assets.ts`: `getPriceTableImage` agora ignora o `variant` recebido e sempre resolve `tabela-01.jpeg` (visao geral, todos os planos + particular/turma juntos) — elimina risco de mandar as variantes por plano isolado em qualquer cenario, mesmo que quem chame o endpoint passe `variant` diferente. (2) `prompt-v1.md` (passo 4 + Formato de saida): antes de `send_price_table=true`, o agente agora deve perguntar se o lead quer aula particular ou em turma nesse turno (`send_price_table=false`), so mandando a tabela no turno seguinte — excecao: se o lead ja passou por essa pergunta antes e pede preco de novo, pula a pergunta e manda direto. (3) Novo `backend/src/shared/text-sanitizer.ts` (`sanitizeOutgoingText`) aplicado em `commercial.service.ts` logo apos extrair `turn.reply` do OpenAI — troca "\n" literal (barra + n, sobrevivendo ao JSON.parse quando o modelo escreve errado) por quebra de linha de verdade; cobre os dois caminhos (`uazapi.webhook.ts` e `n8n-agent.routes.ts`) numa unica fonte. (4) Workflow n8n `Agente - Entrada via Webhook` (`qlkBgS35XBuSysN8`) corrigido via API: node `Filtro Numero Teste` tinha allowlist fixa de 4 numeros de teste sem o numero `5548996667822@s.whatsapp.net`, que por isso caia sempre em `Ignorar - Nao E Numero Teste` e nunca recebia resposta — numero adicionado a lista. Node `Quebrar Resposta em Blocos` (Code) ganhou o mesmo sanitize de "\n" literal do item (3), como segunda camada de defesa.

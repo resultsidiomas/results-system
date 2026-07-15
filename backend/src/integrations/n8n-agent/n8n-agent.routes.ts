@@ -1,16 +1,14 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { env } from '../../config/env.js';
-import { openai } from '../../config/openai.js';
 import { logger } from '../../shared/logger.js';
 import { HttpError, BadRequestError, UnauthorizedError } from '../../shared/http-errors.js';
-import { appendChatMessage, getChatHistory } from '../../agents/shared/agent.memory.redis.js';
-
-const N8N_INSTANCE = 'n8n-agent';
+import { findOrCreateContact } from '../../crm/leads/contacts.repository.js';
+import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
 
 const bodySchema = z.object({
   message: z.string().min(1),
-  sessionId: z.string().optional(),
+  sessionId: z.string().min(1),
   contexto: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -21,6 +19,11 @@ function requireInternalAuth(request: FastifyRequest): void {
   }
 }
 
+function readString(contexto: Record<string, unknown> | undefined, key: string): string {
+  const value = contexto?.[key];
+  return typeof value === 'string' ? value : '';
+}
+
 export async function n8nAgentRoutes(app: FastifyInstance) {
   app.post('/api/v1/n8n-agent/run', async (request: FastifyRequest, reply: FastifyReply) => {
     requireInternalAuth(request);
@@ -29,37 +32,29 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
     if (!parsed.success) throw new BadRequestError('invalid request body');
 
     const { message, sessionId, contexto } = parsed.data;
-    const history = sessionId ? await getChatHistory(N8N_INSTANCE, sessionId) : [];
+    // sessionId vem do n8n como message.chatid — mesmo valor usado como
+    // remoteJid pelo caminho antigo (uazapi.webhook.ts).
+    const remoteJid = sessionId;
+    const phone = remoteJid.split('@')[0];
+    const senderName = readString(contexto, 'senderName') || readString(contexto, 'chatName');
+    const instanceName = readString(contexto, 'instanceName') || env.UAZAPI_INSTANCE;
 
-    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
-    if (contexto && Object.keys(contexto).length) {
-      messages.push({
-        role: 'system',
-        content: `Contexto adicional fornecido pelo chamador: ${JSON.stringify(contexto)}`,
-      });
-    }
-    messages.push(...history, { role: 'user', content: message });
-
-    let agentReply: string;
+    let contact;
     try {
-      const completion = await openai.chat.completions.create({
-        model: env.OPENAI_MODEL_COMMERCIAL,
-        messages,
-        max_tokens: env.OPENAI_MAX_TOKENS,
-      });
-      agentReply = completion.choices[0]?.message?.content ?? '';
-      if (!agentReply) throw new Error('resposta da OpenAI sem conteudo');
+      contact = await findOrCreateContact(phone, senderName);
     } catch (err) {
-      logger.error('n8n-agent turn failed', { sessionId, errorMessage: (err as Error).message });
-      throw new HttpError(502, 'falha ao chamar o agente');
+      logger.error('n8n-agent contact lookup failed', { sessionId, errorMessage: (err as Error).message });
+      throw new HttpError(502, 'falha ao identificar contato');
     }
 
-    if (sessionId) {
-      const at = new Date().toISOString();
-      await appendChatMessage(N8N_INSTANCE, sessionId, { role: 'user', content: message, at });
-      await appendChatMessage(N8N_INSTANCE, sessionId, { role: 'assistant', content: agentReply, at });
+    if (contact.pausar_ia === 'Sim') {
+      return reply.send({ reply: null, sendPriceTable: false, sessionId, reason: 'pausar_ia' });
     }
 
-    return reply.send({ reply: agentReply, sessionId: sessionId ?? null });
+    // Sem roteador M1/M2 aqui: agente de suporte (M2) ainda não existe
+    // (ADR-010) — sempre responde via engine comercial.
+    const turn = await runCommercialTurn(contact, instanceName, remoteJid, message);
+
+    return reply.send({ reply: turn.reply, sendPriceTable: turn.sendPriceTable, sessionId });
   });
 }

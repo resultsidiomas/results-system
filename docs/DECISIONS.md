@@ -10,5 +10,7 @@
 | ADR-006 | Memoria: Redis contexto + PostgreSQL historico | Aceito |
 | ADR-007 | Arquitetura completa dos agentes | Aceito (modelo atualizado por ADR-008) |
 | ADR-008 | Modelo: OpenAI gpt-4.1-mini (agentes + roteador) | Aceito |
+| ADR-009 | Vector store da base de conhecimento (RAG) | Aceito |
+| ADR-010 | n8n passa a chamar a engine completa do agente comercial | Aceito |
 
 Ver arquivos em docs/decisions/

@@ -82,6 +82,8 @@ export async function runSupportTurn(
       errorMessage: (err as Error).message,
     });
     reply = FALLBACK_REPLY;
+    handoff = true;
+    escalationReason = 'outro';
   }
 
   await appendChatMessage(instance, remoteJid, { role: 'user', content: message, at: new Date().toISOString() });

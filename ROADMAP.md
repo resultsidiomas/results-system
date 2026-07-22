@@ -122,26 +122,46 @@ backend/src/agents/commercial/
 ### M2 — Agente de IA Suporte `P0 · CRÍTICO`
 **Semanas:** 1–2 | **Fase:** I | **Responsável backend:** Claude Code
 
-**Entregas:**
-- [ ] Reagendamento de aulas (regra: +3h de antecedência)
-- [ ] Respostas automáticas a dúvidas do app Callan
-- [ ] Comunicação de falta de professor e reagendamento
-- [ ] Informações sobre horários, planos e materiais
-- [ ] Mensagens de aniversário personalizadas
-- [ ] Pesquisa de satisfação trimestral automática
-- [ ] Pedido de avaliação no Google (após 30 dias de matrícula)
-- [ ] Fluxo de retenção para alunos que solicitam cancelamento
+> **Status (2026-07-22):** motor conversacional completo — `runSupportTurn`
+> espelha o motor comercial (RAG, structured output, persistência), ligado
+> nos 3 pontos de entrada (`n8n-agent.routes.ts`, `uazapi.webhook.ts`,
+> console de teste) via `routeAgent`, que já interpretava a intenção da
+> mensagem sem perguntar ao usuário. Escopo aprovado: agente responde
+> dúvidas via RAG e escala pra Gi (pausa a IA + alerta WhatsApp) qualquer
+> ação real (remarcar, cancelar, falta de professor, reclamação séria) —
+> automação real de agenda/calendário fica fora de escopo até a Results
+> fornecer os dados (mesmo bloqueio B1 que existia pro M1). Conteúdo da KB
+> de suporte (`agents/support/*.md`) tem seções ⚠️ aguardando material real
+> da Results (FAQ do app Callan, script de retenção); regra de reagendamento
+> (3h de antecedência, sem reposição em turma) já é conteúdo real, não
+> placeholder.
 
-**Nota:** Ativar M2 antes de M1 (menor risco operacional).
+**Entregas:**
+- [x] Respostas automáticas a dúvidas do app Callan — estrutura pronta,
+      conteúdo real pendente da Results (`agents/support/faq.md`)
+- [x] Informações sobre horários, planos e materiais — RAG ativo
+- [x] Comunicação de falta de professor — reconhece e escala pra Gi
+- [x] Fluxo de retenção para alunos que solicitam cancelamento — reconhece,
+      pergunta motivo, escala pra Gi; script real pendente da Results
+- [ ] Reagendamento efetivo de aulas — regra de 3h documentada e explicada
+      pelo agente, mas confirmação real do novo horário é sempre handoff
+      (sem agenda real integrada ainda)
+- [ ] Mensagens de aniversário personalizadas — fora de escopo (depende de
+      data de matrícula real, ver M5/M6)
+- [ ] Pesquisa de satisfação trimestral automática — fora de escopo
+- [ ] Pedido de avaliação no Google (após 30 dias de matrícula) — fora de
+      escopo
 
 **Arquivos principais:**
 ```
 backend/agents/support/prompt-v1.md
-backend/agents/support/knowledge-base.md
-backend/agents/support/faq.md
 backend/agents/support/rescheduling-rules.md
+backend/agents/support/faq.md
+backend/agents/support/knowledge-base.md
 backend/agents/support/retention-flow.md
 backend/src/agents/support/
+backend/src/agents/shared/agent.handoff.ts
+backend/src/agents/shared/agent.reactivation.ts
 ```
 
 ---

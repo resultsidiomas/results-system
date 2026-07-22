@@ -9,6 +9,51 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-22] - M2: agente de suporte + roteador comercial/suporte ligado
+
+O que: `runSupportTurn` (novo motor de suporte, espelha `runCommercialTurn`:
+RAG filtrado por `agent_type='support'`, structured output OpenAI
+`{reply, needs_human, escalation_reason}`, persistência Redis+Supabase,
+fallback textual em erro). Handoff pra Gi generalizado
+(`commercial.handoff.ts` → `agents/shared/agent.handoff.ts`,
+`notifyGi(contactId, phone, reason, lastReply)`) e reativação pós-pausa
+generalizada (`commercial.reactivation.ts` → `agents/shared/agent.reactivation.ts`)
+pra servir os dois motores. Roteador `routeAgent` (existia desde a Parte 4,
+desconectado desde ADR-010) plugado nos 3 pontos de entrada: endpoint real
+de produção (`n8n-agent.routes.ts`), webhook legado
+(`uazapi.webhook.ts`, sem tráfego real hoje) e console de teste interno
+(`test-chat.routes.ts`). Conteúdo inicial de `agents/support/*.md`: regra
+de reagendamento (3h de antecedência, turma sem reposição) escrita como
+fato real já documentado no projeto; FAQ/knowledge-base/retention-flow com
+seções ⚠️ aguardando material da Results.
+
+Por que: pedido do usuário — agente de suporte pra alunos matriculados,
+decidindo comercial-vs-suporte por interpretação da primeira mensagem
+(nunca perguntando), escalando pra humano qualquer ação real (remarcar,
+cancelar, falta de professor, reclamação) em vez de inventar confirmação
+que o sistema não pode garantir. Ver spec completa em
+`docs/specs/2026-07-22-m2-support-agent-design.md`.
+
+Arquivos: backend/agents/support/*.md (novos), backend/src/agents/support/*.ts
+(novos), backend/src/agents/shared/agent.handoff.ts (novo, substitui
+commercial.handoff.ts), backend/src/agents/shared/agent.reactivation.ts
+(novo, substitui commercial.reactivation.ts), backend/src/agents/shared/agent.types.ts
+(`SupportTurnResult`), backend/src/agents/commercial/commercial.service.ts
+(usa `notifyGi`), backend/src/integrations/n8n-agent/n8n-agent.routes.ts,
+backend/src/whatsapp/uazapi/uazapi.webhook.ts, backend/src/testing/test-chat.routes.ts,
+backend/tests/unit/support.schema.smoke.ts (novo),
+backend/tests/unit/agent.handoff.smoke.ts (renomeado),
+backend/tests/unit/agent.reactivation.smoke.ts (novo), ROADMAP.md.
+
+Impacto: contrato de resposta HTTP de `/api/v1/n8n-agent/run` não muda —
+workflow n8n de produção (`qlkBgS35XBuSysN8`) não precisa de nenhum ajuste,
+a decisão de qual motor responde é 100% interna ao backend. Ingestão
+(`npm run ingest:knowledge`) roda contra o Supabase real, populando
+`knowledge_chunks` com `agent_type='support'`. Sem tabela nova no banco.
+Reagendamento efetivo, aniversário, pesquisa de satisfação e avaliação
+Google seguem fora de escopo (bloqueados por falta de dado real da
+Results, mesmo padrão do bloqueio B1 que existiu pro M1).
+
 ## [2026-07-15] - M1: mais um numero de teste liberado no workflow n8n
 
 O que: node `Filtro Numero Teste` do workflow `Agente - Entrada via Webhook` (`qlkBgS35XBuSysN8`) ganhou `5541987490574@s.whatsapp.net` na allowlist, via `PUT /api/v1/workflows/:id`.

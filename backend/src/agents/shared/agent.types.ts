@@ -1,4 +1,5 @@
 import type { PriceTableVariant } from '../commercial/commercial.schema.js';
+import type { EscalationReason } from '../support/support.schema.js';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -12,4 +13,10 @@ export interface AgentTurnResult {
   handoff: boolean;
   sendPriceTable: boolean;
   priceTableVariant: PriceTableVariant;
+}
+
+export interface SupportTurnResult {
+  reply: string;
+  handoff: boolean;
+  escalationReason: EscalationReason | null;
 }

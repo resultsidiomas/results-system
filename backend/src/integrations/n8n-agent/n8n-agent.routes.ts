@@ -4,7 +4,9 @@ import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { HttpError, BadRequestError, UnauthorizedError } from '../../shared/http-errors.js';
 import { findOrCreateContact, updatePausarIa } from '../../crm/leads/contacts.repository.js';
+import { routeAgent } from '../../agents/router/agent.router.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
+import { runSupportTurn } from '../../agents/support/support.service.js';
 import { shouldReactivate } from '../../agents/shared/agent.reactivation.js';
 import { sendPriceTableImage } from '../../whatsapp/uazapi/uazapi.sender.js';
 import { PRICE_TABLE_VARIANTS } from '../../agents/commercial/commercial.schema.js';
@@ -32,6 +34,36 @@ function readString(contexto: Record<string, unknown> | undefined, key: string):
   return typeof value === 'string' ? value : '';
 }
 
+interface RunResult {
+  reply: string;
+  sendPriceTable: boolean;
+  priceTableVariant: string | null;
+  handoff: boolean;
+}
+
+async function runRoutedTurn(
+  contact: Awaited<ReturnType<typeof findOrCreateContact>>,
+  instanceName: string,
+  remoteJid: string,
+  message: string,
+  notifyHandoff: boolean,
+): Promise<RunResult> {
+  const agentType = await routeAgent(contact, message);
+
+  if (agentType === 'support') {
+    const turn = await runSupportTurn(contact, instanceName, remoteJid, message, { notifyHandoff });
+    return { reply: turn.reply, sendPriceTable: false, priceTableVariant: null, handoff: turn.handoff };
+  }
+
+  const turn = await runCommercialTurn(contact, instanceName, remoteJid, message, { notifyHandoff });
+  return {
+    reply: turn.reply,
+    sendPriceTable: turn.sendPriceTable,
+    priceTableVariant: turn.sendPriceTable ? turn.priceTableVariant : null,
+    handoff: turn.handoff,
+  };
+}
+
 export async function n8nAgentRoutes(app: FastifyInstance) {
   app.post('/api/v1/n8n-agent/run', async (request: FastifyRequest, reply: FastifyReply) => {
     requireInternalAuth(request);
@@ -55,15 +87,12 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
       throw new HttpError(502, 'falha ao identificar contato');
     }
 
-    // Sem roteador M1/M2 aqui: agente de suporte (M2) ainda não existe
-    // (ADR-010) — sempre responde via engine comercial.
-
     if (contact.pausar_ia === 'Sim') {
-      // Handoff já aconteceu (Gi está com o lead). Só volta a falar se a
-      // mensagem for uma dúvida real — nunca reabre o score/handoff de
-      // novo (notifyHandoff:false) pra não reencaminhar/alertar a Gi de
-      // novo pela mesma coisa. Depois de responder, volta pra pausado —
-      // a próxima mensagem passa pela mesma checagem (ver ADR-011).
+      // Handoff já aconteceu (Gi está com o contato). Só volta a falar se a
+      // mensagem for uma dúvida real — nunca reabre score/handoff de novo
+      // (notifyHandoff:false) pra não reencaminhar/alertar a Gi de novo
+      // pela mesma coisa. Depois de responder, volta pra pausado — a
+      // próxima mensagem passa pela mesma checagem (ver ADR-011).
       const wantsToContinue = await shouldReactivate(message);
       if (!wantsToContinue) {
         return reply.send({
@@ -75,31 +104,25 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
         });
       }
 
-      const turn = await runCommercialTurn(
-        { ...contact, pausar_ia: 'Não' },
-        instanceName,
-        remoteJid,
-        message,
-        { notifyHandoff: false },
-      );
+      const result = await runRoutedTurn({ ...contact, pausar_ia: 'Não' }, instanceName, remoteJid, message, false);
       await updatePausarIa(contact.id, 'Sim');
 
       return reply.send({
-        reply: turn.reply,
-        sendPriceTable: turn.sendPriceTable,
-        priceTableVariant: turn.sendPriceTable ? turn.priceTableVariant : null,
+        reply: result.reply,
+        sendPriceTable: result.sendPriceTable,
+        priceTableVariant: result.priceTableVariant,
         sessionId,
         pausarIa: 'Sim',
       });
     }
 
-    const turn = await runCommercialTurn(contact, instanceName, remoteJid, message);
-    const pausarIa = turn.handoff ? 'Sim' : 'Não';
+    const result = await runRoutedTurn(contact, instanceName, remoteJid, message, true);
+    const pausarIa = result.handoff ? 'Sim' : 'Não';
 
     return reply.send({
-      reply: turn.reply,
-      sendPriceTable: turn.sendPriceTable,
-      priceTableVariant: turn.sendPriceTable ? turn.priceTableVariant : null,
+      reply: result.reply,
+      sendPriceTable: result.sendPriceTable,
+      priceTableVariant: result.priceTableVariant,
       sessionId,
       pausarIa,
     });

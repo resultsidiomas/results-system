@@ -9,6 +9,7 @@ import { appendChatMessage } from '../../agents/shared/agent.memory.redis.js';
 import { joinMessages } from '../../agents/shared/agent.message-join.js';
 import { routeAgent } from '../../agents/router/agent.router.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
+import { runSupportTurn } from '../../agents/support/support.service.js';
 import { sendFractured, sendPriceTableImage } from './uazapi.sender.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
@@ -119,7 +120,8 @@ export async function uazapiWebhookRoute(app: FastifyInstance) {
       return reply.status(200).send({ status: 'ok', agentType, leadScore: turn.leadScore });
     }
 
-    // M2 (support) plugs in here in a future session
-    return reply.status(200).send({ status: 'ok', agentType });
+    const supportTurn = await runSupportTurn(contact, instanceName, remoteJid, joined);
+    await sendFractured(remoteJid, supportTurn.reply);
+    return reply.status(200).send({ status: 'ok', agentType, handoff: supportTurn.handoff });
   });
 }

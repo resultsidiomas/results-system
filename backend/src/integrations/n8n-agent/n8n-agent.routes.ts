@@ -5,7 +5,7 @@ import { logger } from '../../shared/logger.js';
 import { HttpError, BadRequestError, UnauthorizedError } from '../../shared/http-errors.js';
 import { findOrCreateContact, updatePausarIa } from '../../crm/leads/contacts.repository.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
-import { shouldReactivate } from '../../agents/commercial/commercial.reactivation.js';
+import { shouldReactivate } from '../../agents/shared/agent.reactivation.js';
 import { sendPriceTableImage } from '../../whatsapp/uazapi/uazapi.sender.js';
 import { PRICE_TABLE_VARIANTS } from '../../agents/commercial/commercial.schema.js';
 

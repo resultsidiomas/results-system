@@ -2,15 +2,16 @@ import { openai } from '../../config/openai.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 
-const SYSTEM_PROMPT = `Um lead de uma escola de idiomas foi encaminhado pra atendimento humano
+const SYSTEM_PROMPT = `Um contato de uma escola de idiomas foi encaminhado pra atendimento humano
 (pausar_ia='Sim') e agora mandou uma nova mensagem no WhatsApp. Classifique
 se essa mensagem contém uma dúvida real que precisa de resposta, ou se é só
 um encerramento/agradecimento sem necessidade de resposta.
 
 Responda com exatamente uma palavra, sem pontuação: duvida ou encerrado.
 
-duvida: pergunta sobre curso/preço/horário/aula, pedido de ajuda, qualquer
-coisa que precise de resposta pra o lead seguir em frente.
+duvida: pergunta sobre curso/preço/horário/aula/reagendamento, pedido de
+ajuda, qualquer coisa que precise de resposta pra o contato seguir em
+frente.
 encerrado: agradecimento, confirmação simples ("ok", "tá bom", "👍"),
 mensagem sem conteúdo que peça resposta.`;
 

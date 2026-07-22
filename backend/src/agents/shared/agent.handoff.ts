@@ -3,7 +3,12 @@ import { sendText } from '../../whatsapp/uazapi/uazapi.sender.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 
-export async function handoffToGi(contactId: string, phone: string, lastReply: string): Promise<void> {
+export async function notifyGi(
+  contactId: string,
+  phone: string,
+  reason: string,
+  lastReply: string,
+): Promise<void> {
   const { error } = await supabase.from('contacts').update({ pausar_ia: 'Sim' }).eq('id', contactId);
   if (error) throw error;
 
@@ -14,6 +19,6 @@ export async function handoffToGi(contactId: string, phone: string, lastReply: s
 
   await sendText(
     env.GI_ALERT_NUMBER,
-    `Lead quente! Telefone: ${phone}\nÚltima resposta da IA: ${lastReply}`,
+    `${reason}\nTelefone: ${phone}\nÚltima resposta da IA: ${lastReply}`,
   );
 }

@@ -12,7 +12,7 @@ import { buildMessages } from '../shared/agent.context.js';
 import { commercialTurnSchema, commercialResponseJsonSchema } from './commercial.schema.js';
 import type { PriceTableVariant } from './commercial.schema.js';
 import { scoreLead, shouldHandoff } from './commercial.scoring.js';
-import { handoffToGi } from './commercial.handoff.js';
+import { notifyGi } from '../shared/agent.handoff.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
 import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
 
@@ -84,7 +84,7 @@ export async function runCommercialTurn(
 
   const handoff = shouldHandoff(leadScore);
   if (handoff && options.notifyHandoff !== false) {
-    await handoffToGi(contact.id, contact.phone, reply);
+    await notifyGi(contact.id, contact.phone, 'Lead quente!', reply);
   }
 
   // Quem chama decide QUANDO entregar a tabela (imagem só pode ir depois do

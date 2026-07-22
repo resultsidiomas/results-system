@@ -9,6 +9,7 @@ export interface Conversation {
   lead_score: number;
   collected_data: Record<string, unknown>;
   stage: string;
+  updated_at: string;
 }
 
 export async function getOrCreateConversation(
@@ -33,6 +34,22 @@ export async function getOrCreateConversation(
 
   if (createError) throw createError;
   return created as Conversation;
+}
+
+/** Só leitura — ao contrário de getOrCreateConversation, nunca cria linha nova. */
+export async function findConversation(
+  contactId: string,
+  agentType: 'commercial' | 'support',
+): Promise<Conversation | null> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('contact_id', contactId)
+    .eq('agent_type', agentType)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as Conversation | null;
 }
 
 export async function appendConversationTurn(

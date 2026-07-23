@@ -17,6 +17,12 @@ Não confiar no LLM pra dizer "esse lead é quente".
 
 Score máximo: 10. **Handoff pra Gi em score ≥ 7.**
 
+`wants_to_schedule` e `lead_source` **não entram nessa soma** — são
+tratados por regra própria, não por pontuação (ver
+`commercial/handoff-rules.md` § Agendamento de aula experimental).
+`shouldHandoff(score, collectedData)`: `true` se `score >= 7` **ou**
+`collectedData.wants_to_schedule === true`.
+
 ## Ordem de coleta observada nos atendimentos reais
 
 Confirma o schema já implementado — seguir essa ordem natural na conversa,

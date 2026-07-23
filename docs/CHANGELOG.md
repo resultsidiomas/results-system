@@ -9,6 +9,40 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-23] - M1: correções fase 2 no agente comercial (auditoria + atendimentos reais)
+
+O que: corrige fato errado sobre a aula experimental (sempre individual,
+Prof. Eduardo faz o nivelamento — não mais "turma ou particular"); agente
+para de inventar dia/hora de agendamento e passa a coletar
+turno/dias preferidos, disparando handoff imediato (`wants_to_schedule`)
+independente do score, já que não há integração de calendário real;
+disciplina de fechamento nova (sinal de aceitação do lead sempre
+confirmado no mesmo turno, conversa nunca termina em aberto); objeção de
+comparação com concorrente não valida mais o frame da comparação; guarda
+contra declarar nº de módulos/estágios não confirmado (alucinação real
+observada); captura de `lead_source` pro CRM; `AGENT_MESSAGE_WAIT_MS`
+45s → 18s.
+
+Por que: auditoria formal da DROP Agency (Camila) + 4 atendimentos reais +
+1 conversa de teste do Edu, coletados em `docs.agente/fase 2/`, apontaram
+esses bugs de comportamento em produção. Spec completa em
+`docs/specs/2026-07-23-m1-commercial-agent-fase2-fixes-design.md`.
+
+Arquivos: `backend/agents/shared/school-info.md`,
+`backend/agents/commercial/prompt-v1.md`,
+`backend/agents/commercial/objections.md`,
+`backend/agents/commercial/handoff-rules.md`,
+`backend/agents/commercial/scoring-rules.md`,
+`backend/src/agents/commercial/commercial.schema.ts`,
+`backend/src/agents/commercial/commercial.scoring.ts`,
+`backend/src/agents/commercial/commercial.service.ts`,
+`backend/tests/unit/commercial.scoring.smoke.ts`, `.env`, `.env.example`,
+`backend/src/config/env.ts`.
+
+Impacto: comportamento do M1 em produção (prompt + handoff + tempo de
+resposta). Nenhuma mudança de schema de banco, nenhuma mudança de contrato
+HTTP.
+
 ## [2026-07-22] - M2: agente de suporte + roteador comercial/suporte ligado
 
 O que: `runSupportTurn` (novo motor de suporte, espelha `runCommercialTurn`:

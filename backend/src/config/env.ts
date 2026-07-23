@@ -20,7 +20,7 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().min(1),
   REDIS_PASSWORD: z.string().optional(),
-  AGENT_MESSAGE_WAIT_MS: z.coerce.number().int().positive().default(45000),
+  AGENT_MESSAGE_WAIT_MS: z.coerce.number().int().positive().default(18000),
   AGENT_BLOCK_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   AGENT_HISTORY_LIMIT: z.coerce.number().int().positive().default(15),
 

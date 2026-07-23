@@ -12,6 +12,6 @@ export function scoreLead(data: CommercialCollectedData, messageCount: number): 
   return Math.min(score, 10);
 }
 
-export function shouldHandoff(score: number): boolean {
-  return score >= 7;
+export function shouldHandoff(score: number, data: CommercialCollectedData): boolean {
+  return score >= 7 || data.wants_to_schedule === true;
 }

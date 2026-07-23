@@ -16,7 +16,7 @@ import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
 import { notifyGi } from '../shared/agent.handoff.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const PROMPT_PATH = resolve(__dirname, '../../../../agents/support/prompt-v1.md');
+const PROMPT_PATH = resolve(__dirname, '../../../agents/support/prompt-v1.md');
 const SYSTEM_PROMPT = readFileSync(PROMPT_PATH, 'utf-8');
 
 function buildSystemPrompt(knowledgeContext: string): string {

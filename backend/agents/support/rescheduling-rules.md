@@ -1,8 +1,29 @@
 ## Regra de antecedência
 
-Reagendamento de aula exige no mínimo 3h de antecedência do horário
-marcado. Pedido com menos de 3h não pode ser garantido — sinalizar isso
-ao aluno e escalar mesmo assim, a equipe decide caso a caso.
+Reagendamento gratuito exige aviso ao professor com no mínimo 3h de
+antecedência do horário marcado. Pra alunos com aula entre 6h e 9h da
+manhã, isso na prática significa avisar até 18h45 do dia anterior.
+
+Pedido com menos de 3h de antecedência **ainda pode ser reagendado**,
+mas tem custo de R$ 35,00 (o horário já estava reservado exclusivamente
+pro aluno). Sinalizar esse valor ao aluno e escalar mesmo assim — o
+agente nunca confirma o reagendamento nem cobra o valor sozinho, a
+equipe decide e executa.
+
+Antecipar uma aula (pedir horário mais cedo) é sempre gratuito e não
+consome o limite mensal abaixo — é a opção mais vantajosa pro aluno.
+
+## Limite mensal de reagendamentos gratuitos
+
+Não acumula de um mês pro outro. Limite por frequência semanal do aluno:
+- 1x/semana → 1 reagendamento grátis/mês
+- 2x/semana → 2 reagendamentos grátis/mês
+- 3x/semana → 3 reagendamentos grátis/mês
+- 4x/semana → 4 reagendamentos grátis/mês
+- 5x/semana → 5 reagendamentos grátis/mês
+
+Pedido além do limite mensal: mesma lógica do aviso curto — sinalizar ao
+aluno e escalar, a equipe decide caso a caso (pode envolver custo).
 
 ## Aula particular
 

@@ -10,7 +10,7 @@ import { getChatHistory, appendChatMessage } from '../shared/agent.memory.redis.
 import { getOrCreateConversation, appendConversationTurn } from '../shared/agent.memory.pg.js';
 import { buildMessages } from '../shared/agent.context.js';
 import { commercialTurnSchema, commercialResponseJsonSchema } from './commercial.schema.js';
-import type { PriceTableVariant } from './commercial.schema.js';
+import type { PriceTableVariant, CommercialCollectedData } from './commercial.schema.js';
 import { scoreLead, shouldHandoff } from './commercial.scoring.js';
 import { notifyGi } from '../shared/agent.handoff.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
@@ -27,6 +27,17 @@ function buildSystemPrompt(knowledgeContext: string): string {
 
 const FALLBACK_REPLY =
   'Desculpa, tive um problema técnico aqui. Já vou repassar sua mensagem pra nossa equipe te responder, tá?';
+
+const EMPTY_COLLECTED_DATA: CommercialCollectedData = {
+  interested_course: null,
+  availability: null,
+  objective: null,
+  urgency: null,
+  has_tried_before: null,
+  price_asked: null,
+  wants_to_schedule: null,
+  lead_source: null,
+};
 
 export interface RunCommercialTurnOptions {
   /** false pro console de teste — evita alertar a Gi via WhatsApp real com dado fictício */
@@ -49,6 +60,7 @@ export async function runCommercialTurn(
   let leadScore: number;
   let sendPriceTable = false;
   let priceTableVariant: PriceTableVariant = 'geral';
+  let collectedData: CommercialCollectedData = EMPTY_COLLECTED_DATA;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -65,12 +77,13 @@ export async function runCommercialTurn(
     const turn = commercialTurnSchema.parse(JSON.parse(raw));
 
     const messageCount = conversation.messages.length + 2;
-    leadScore = scoreLead(turn.collected_data, messageCount);
+    collectedData = turn.collected_data;
+    leadScore = scoreLead(collectedData, messageCount);
     reply = sanitizeOutgoingText(turn.reply);
     sendPriceTable = turn.send_price_table;
     priceTableVariant = turn.price_table_variant;
 
-    await appendConversationTurn(conversation, message, reply, leadScore, turn.collected_data);
+    await appendConversationTurn(conversation, message, reply, leadScore, collectedData);
   } catch (err) {
     logger.error('commercial turn failed, using fallback reply', {
       errorMessage: (err as Error).message,
@@ -82,9 +95,10 @@ export async function runCommercialTurn(
   await appendChatMessage(instance, remoteJid, { role: 'user', content: message, at: new Date().toISOString() });
   await appendChatMessage(instance, remoteJid, { role: 'assistant', content: reply, at: new Date().toISOString() });
 
-  const handoff = shouldHandoff(leadScore);
+  const handoff = shouldHandoff(leadScore, collectedData);
   if (handoff && options.notifyHandoff !== false) {
-    await notifyGi(contact.id, contact.phone, 'Lead quente!', reply);
+    const reason = collectedData.wants_to_schedule ? 'Lead quer agendar aula experimental!' : 'Lead quente!';
+    await notifyGi(contact.id, contact.phone, reason, reply);
   }
 
   // Quem chama decide QUANDO entregar a tabela (imagem só pode ir depois do

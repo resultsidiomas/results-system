@@ -14,6 +14,8 @@ export const commercialTurnSchema = z.object({
     urgency: z.enum(['alta', 'baixa']).nullable(),
     has_tried_before: z.boolean().nullable(),
     price_asked: z.boolean().nullable(),
+    wants_to_schedule: z.boolean().nullable(),
+    lead_source: z.string().nullable(),
   }),
 });
 
@@ -38,6 +40,8 @@ export const commercialResponseJsonSchema = {
           urgency: { type: ['string', 'null'], enum: ['alta', 'baixa', null] },
           has_tried_before: { type: ['boolean', 'null'] },
           price_asked: { type: ['boolean', 'null'] },
+          wants_to_schedule: { type: ['boolean', 'null'] },
+          lead_source: { type: ['string', 'null'] },
         },
         required: [
           'interested_course',
@@ -46,6 +50,8 @@ export const commercialResponseJsonSchema = {
           'urgency',
           'has_tried_before',
           'price_asked',
+          'wants_to_schedule',
+          'lead_source',
         ],
         additionalProperties: false,
       },

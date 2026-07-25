@@ -8,9 +8,16 @@ const envSchema = z.object({
   OPENAI_MODEL_ROUTER: z.string().default('gpt-4.1-mini'),
   OPENAI_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  // Agentes M1/M2 rodavam sem temperature (default 1.0 da OpenAI) — aderência
+  // instável a regra rígida (abreviação, horário inventado, frase repetida).
+  // 0.4 mantém naturalidade e segue o prompt. Classificadores usam 0 próprio.
+  AGENT_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.4),
 
   // Knowledge base / RAG (ADR-009)
   KNOWLEDGE_MATCH_COUNT: z.coerce.number().int().positive().default(4),
+  // Piso de similaridade — sem isso o RPC devolve sempre 4 chunks, mesmo
+  // irrelevantes, diluindo o prompt com contexto que não responde a pergunta.
+  KNOWLEDGE_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.3),
 
   // Supabase
   SUPABASE_URL: z.string().url(),

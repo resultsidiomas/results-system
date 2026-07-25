@@ -14,5 +14,6 @@
 | ADR-010 | n8n passa a chamar a engine completa do agente comercial | Aceito |
 | ADR-011 | Reativação da IA durante pausar_ia='Sim' | Aceito |
 | ADR-012 | Ordem texto→tabela e tabela por variante de plano | Aceito |
+| ADR-013 | Regra de comportamento no system prompt, RAG só pra fato | Aceito |
 
 Ver arquivos em docs/decisions/

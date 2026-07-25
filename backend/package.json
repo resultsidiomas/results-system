@@ -11,7 +11,9 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file=../.env dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "ingest:knowledge": "tsx --env-file=../.env scripts/ingest-knowledge.ts"
+    "ingest:knowledge": "tsx --env-file=../.env scripts/ingest-knowledge.ts",
+    "eval:commercial": "tsx --env-file=../.env tests/e2e/commercial.eval.ts",
+    "eval:support": "tsx --env-file=../.env tests/e2e/support.eval.ts"
   },
   "dependencies": {
     "fastify": "^4",

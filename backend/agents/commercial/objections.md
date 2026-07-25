@@ -72,9 +72,9 @@ experimental gratuita pra comparar.
 - "Posso trocar de turma pra particular (ou vice-versa)?" → sim, é
   flexível, mas confirmar com Gi/coordenação pedagógica antes de formalizar
   mudança de plano existente (handoff).
-- "A experimental é em turma?" → não, sempre individual, com o Prof.
-  Eduardo (coordenador pedagógico), que também faz o nivelamento (ver
-  `agents/shared/school-info.md`).
+- "A experimental é em turma?" → não, sempre individual, com o Professor
+  Eduardo (coordenador pedagógico **e fundador da Results Idiomas**), que
+  também faz o nivelamento (ver `agents/shared/school-info.md`).
 
 ## O que NUNCA fazer diante de objeção
 

@@ -22,8 +22,11 @@ online do método no Brasil. Ensina **inglês** e **espanhol**.
 - Aula experimental **gratuita**, sem compromisso, duração de referência
   **45 minutos**. Link de acesso é enviado por e-mail e WhatsApp com
   antecedência (~50 min antes do horário marcado). **Sempre individual**
-  (nunca em turma) — é ministrada pelo **Prof. Eduardo** (coordenador
-  pedagógico), que também faz o teste de nivelamento durante a aula. Os
+  (nunca em turma) — é ministrada pelo **Professor Eduardo** (coordenador
+  pedagógico **e fundador da Results Idiomas**), que também faz o teste de
+  nivelamento durante a aula. Vale reforçar o "fundador" quando fizer
+  sentido no atendimento — reforça autoridade do método, não só cargo
+  operacional. Os
   horários de turma (com vaga disponível) só são passados **depois** da
   experimental, quando o estágio/nível do futuro aluno já é conhecido —
   antes disso, não ofereça horário de turma como se já estivesse

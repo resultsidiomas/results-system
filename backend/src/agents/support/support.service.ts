@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
 import { openai } from '../../config/openai.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
@@ -9,20 +6,31 @@ import type { SupportTurnResult } from '../shared/agent.types.js';
 import { getChatHistory, appendChatMessage } from '../shared/agent.memory.redis.js';
 import { getOrCreateConversation, appendConversationTurn } from '../shared/agent.memory.pg.js';
 import { buildMessages } from '../shared/agent.context.js';
+import { composeSystemPrompt, withKnowledgeContext } from '../shared/agent.prompt.js';
 import { supportTurnSchema, supportResponseJsonSchema } from './support.schema.js';
 import type { EscalationReason } from './support.schema.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
 import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
 import { notifyGi } from '../shared/agent.handoff.js';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const PROMPT_PATH = resolve(__dirname, '../../../agents/support/prompt-v1.md');
-const SYSTEM_PROMPT = readFileSync(PROMPT_PATH, 'utf-8');
+/**
+ * Regra de comportamento vai toda no system prompt — nunca como referência a
+ * arquivo, que o modelo não consegue abrir (ver `agent.prompt.ts`).
+ */
+const SYSTEM_PROMPT = composeSystemPrompt([
+  'support/prompt-v1.md',
+  'shared/persona.md',
+  'shared/forbidden-phrases.md',
+  'shared/school-info.md',
+  'support/rescheduling-rules.md',
+  'support/retention-flow.md',
+  // FAQ vai no prompt, não na busca: é pequeno, é o assunto mais frequente do
+  // suporte, e quando a recuperação falhava o agente inventava um fluxo de
+  // "Esqueci minha senha" que não existe em vez de mandar o link real.
+  'support/faq.md',
+]);
 
-function buildSystemPrompt(knowledgeContext: string): string {
-  if (!knowledgeContext) return SYSTEM_PROMPT;
-  return `${SYSTEM_PROMPT}\n\nCONTEXTO RELEVANTE (base de conhecimento da Results — use pra responder com precisão, nunca invente política fora disso):\n${knowledgeContext}`;
-}
+const KNOWLEDGE_GUARDRAIL = 'use pra responder com precisão, nunca invente política fora disso';
 
 const FALLBACK_REPLY =
   'Desculpa, tive um problema técnico aqui. Já vou repassar sua mensagem pra nossa equipe te responder, tá?';
@@ -49,7 +57,8 @@ export async function runSupportTurn(
 ): Promise<SupportTurnResult> {
   const history = await getChatHistory(instance, remoteJid);
   const knowledgeContext = await retrieveKnowledgeContext(message, 'support');
-  const messages = buildMessages(buildSystemPrompt(knowledgeContext), history, message);
+  const systemPrompt = withKnowledgeContext(SYSTEM_PROMPT, knowledgeContext, KNOWLEDGE_GUARDRAIL);
+  const messages = buildMessages(systemPrompt, history, message);
   const conversation = await getOrCreateConversation(contact.id, 'support');
 
   let reply: string;
@@ -60,6 +69,7 @@ export async function runSupportTurn(
     const completion = await openai.chat.completions.create({
       model: env.OPENAI_MODEL_SUPPORT,
       messages,
+      temperature: env.AGENT_TEMPERATURE,
       max_tokens: env.OPENAI_MAX_TOKENS,
       response_format: {
         type: 'json_schema',
@@ -90,7 +100,10 @@ export async function runSupportTurn(
   await appendChatMessage(instance, remoteJid, { role: 'assistant', content: reply, at: new Date().toISOString() });
 
   if (handoff && options.notifyHandoff !== false) {
-    await notifyGi(contact.id, contact.phone, ESCALATION_LABELS[escalationReason ?? 'outro'], reply);
+    await notifyGi(contact.id, contact.phone, ESCALATION_LABELS[escalationReason ?? 'outro'], reply, {
+      Nome: contact.name,
+      Tipo: contact.type === 'student' ? 'aluno matriculado' : 'lead',
+    });
   }
 
   return { reply, handoff, escalationReason };

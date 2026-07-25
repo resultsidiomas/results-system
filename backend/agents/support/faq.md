@@ -12,6 +12,8 @@
 
 ### Esqueci a senha / não consigo logar
 Link pra alterar senha: https://casa.callanonline.com/password-change-request
+**Mande essa URL sempre inteira, numa bolha só, sem quebrar no meio** (ver
+`agents/shared/persona.md` — já aconteceu de o link ir cortado pro aluno).
 O usuário do app é sempre o e-mail **pessoal** do aluno (não o e-mail da
 escola/office, quando ele tiver um). A escola não tem acesso à senha do
 aluno — só ele consegue alterá-la, por esse link.

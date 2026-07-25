@@ -1,13 +1,22 @@
 ## Quando escalar pra Gi (handoff)
 
 ### Automático (já implementado em código)
-- Lead score ≥ 7 (`commercial.scoring.ts` + `commercial.handoff.ts`) —
+- Lead score ≥ 9 (`commercial.scoring.ts` + `agent.handoff.ts`) —
   `pausar_ia = 'Sim'` no contato, IA para de responder, alerta enviado pro
-  `GI_ALERT_NUMBER` se configurado.
+  `GI_ALERT_NUMBER` se configurado. O alerta leva nome, e-mail, idioma,
+  objetivo, disponibilidade, urgência, origem e score, pra Gi assumir a
+  conversa já sabendo com quem está falando.
+- Falha técnica no turno (erro de API/parse): o agente responde o fallback
+  prometendo que a equipe vai responder — então gera handoff de verdade,
+  com motivo "Falha técnica no agente". Sem isso o lead recebia a promessa
+  e ninguém era avisado.
 
-### Deve gerar handoff mesmo com score baixo (reforçar no prompt do agente)
-Observado nos atendimentos reais — situações que uma pessoa precisa tratar,
-não a IA:
+### Deve gerar handoff mesmo com score baixo — `needs_human = true`
+Situações abaixo o modelo marca `needs_human = true` no `collected_data`, o
+que dispara handoff imediato independente do score. Antes essas regras
+estavam escritas aqui mas **não existia caminho no código** pra elas: o
+comercial só tinha handoff por score e por `wants_to_schedule`, então
+"quero falar com uma pessoa" não escalava nada.
 - Lead pede desconto/condição especial fora da tabela publicada, ou tenta
   negociar valor de contrato já ativo.
 - Lead pede pra trocar plano/turma existente (mudança de contrato, não

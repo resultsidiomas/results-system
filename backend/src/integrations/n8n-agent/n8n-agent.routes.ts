@@ -5,6 +5,7 @@ import { logger } from '../../shared/logger.js';
 import { HttpError, BadRequestError, UnauthorizedError } from '../../shared/http-errors.js';
 import { findOrCreateContact, updatePausarIa } from '../../crm/leads/contacts.repository.js';
 import { routeAgent } from '../../agents/router/agent.router.js';
+import { getChatHistory } from '../../agents/shared/agent.memory.redis.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
 import { runSupportTurn } from '../../agents/support/support.service.js';
 import { shouldReactivate } from '../../agents/shared/agent.reactivation.js';
@@ -48,7 +49,10 @@ async function runRoutedTurn(
   message: string,
   notifyHandoff: boolean,
 ): Promise<RunResult> {
-  const agentType = await routeAgent(contact, message);
+  // Histórico entra no roteamento pra mensagem curta ("sim", "e o horário?")
+  // não trocar de agente no meio da conversa.
+  const history = await getChatHistory(instanceName, remoteJid);
+  const agentType = await routeAgent(contact, message, history);
 
   if (agentType === 'support') {
     const turn = await runSupportTurn(contact, instanceName, remoteJid, message, { notifyHandoff });

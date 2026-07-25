@@ -9,7 +9,7 @@ import {
 } from '../crm/leads/contacts.repository.js';
 import { findConversation } from '../agents/shared/agent.memory.pg.js';
 import type { Conversation } from '../agents/shared/agent.memory.pg.js';
-import { clearChatHistory } from '../agents/shared/agent.memory.redis.js';
+import { clearChatHistory, getChatHistory } from '../agents/shared/agent.memory.redis.js';
 import { clearBlock } from '../agents/shared/agent.pause.js';
 import { routeAgent } from '../agents/router/agent.router.js';
 import { runCommercialTurn } from '../agents/commercial/commercial.service.js';
@@ -77,7 +77,8 @@ export async function testChatRoutes(app: FastifyInstance) {
     if (!parsedBody.success) throw new BadRequestError('invalid message body');
 
     const contact = await findOrCreateContact(testPhone(sessionId), 'Teste (Console)');
-    const agentType = await routeAgent(contact, parsedBody.data.message);
+    const history = await getChatHistory(TEST_INSTANCE, sessionId);
+    const agentType = await routeAgent(contact, parsedBody.data.message, history);
 
     if (agentType === 'support') {
       const turn = await runSupportTurn(contact, TEST_INSTANCE, sessionId, parsedBody.data.message, {

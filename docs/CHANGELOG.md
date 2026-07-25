@@ -9,6 +9,71 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-24] - M1+M2: revisão completa do agente (qualificação, entrega de regra, handoff)
+
+O que:
+1. Regra de comportamento passa a ir inteira no system prompt (ADR-013). Antes
+   só `prompt-v1.md` era lido de disco e o resto era referência "ver
+   `agents/shared/persona.md`" — ponteiro que o modelo não abre. Tom, frases
+   proibidas, dados da escola, objeções e handoff chegavam apenas se a busca
+   semântica sorteasse o chunk, o que quase nunca acontecia.
+2. `AGENT_TEMPERATURE=0.4` explícita nos dois agentes (antes default 1.0 da
+   OpenAI → aderência instável a regra rígida).
+3. Score do lead calculado sobre o acumulado da conversa (`mergeCollectedData`)
+   e não sobre o turno isolado; `null` de turno novo não apaga mais dado já
+   coletado, e `price_asked`/`wants_to_schedule`/`needs_human` viraram travas.
+4. `HANDOFF_SCORE_THRESHOLD` de 7 → 9: com 7 a IA emudecia no meio da
+   qualificação, antes de explicar método, mandar tabela e convidar pra
+   experimental.
+5. `needs_human` novo no `collected_data`: lead que pede atendente, negocia
+   fora da tabela, reclama ou pergunta do plano "Conversação" agora escala de
+   verdade. As regras existiam em `handoff-rules.md` mas não tinham caminho no
+   código.
+6. `full_name` e `email` no `collected_data` — o prompt mandava coletar os dois
+   no fechamento e não havia onde guardar; o dado morria no histórico.
+7. Fallback do comercial agora gera handoff. Ele promete ao lead que a equipe
+   vai responder, e ninguém era avisado (o de suporte já fazia certo).
+8. Alerta de handoff pra Gi leva nome, e-mail, idioma, objetivo,
+   disponibilidade, urgência, origem e score — antes ia só motivo, telefone e
+   última resposta da IA.
+9. Roteador considera o histórico recente e não só a última mensagem: "sim" ou
+   "e o horário?" no meio da qualificação trocava de agente. Aluno matriculado
+   deixa de ficar travado no suporte — pedido comercial explícito (segundo
+   idioma, mais aulas) volta a chegar no M1, destravando upsell.
+10. RAG com piso de similaridade (`KNOWLEDGE_MIN_SIMILARITY=0.3`) e ingestão
+    com allowlist explícita de fontes factuais — o `prompt-v1.md` estava sendo
+    indexado e voltava pro modelo como "CONTEXTO RELEVANTE".
+11. `support/faq.md` promovido pro system prompt: dependendo da busca, o agente
+    descrevia um fluxo de "Esqueci minha senha" que não existe em vez de mandar
+    `https://casa.callanonline.com/password-change-request`. Critério novo em
+    ADR-013: fato cuja falha de recuperação faz o agente inventar vai pro
+    prompt; fato que só levaria a "vou confirmar com a equipe" pode ficar na
+    busca.
+12. Evals de conversa (`npm run eval:commercial`, `npm run eval:support`) —
+    29 + 10 checks contra o prompt de produção, cobrindo os defeitos relatados
+    em atendimento real (pergunta redundante, horário inventado, abreviação,
+    link cortado, dois idiomas cortados, tabela segurada sem motivo). Antes não
+    havia forma de medir regressão de comportamento.
+
+Por que: revisão completa do fluxo (nota 6/10) apontou que os defeitos
+relatados pela DROP em atendimento real — abreviação, horário inexistente,
+texto/emoji repetido, link cortado, pergunta redundante — tinham causa comum
+na entrega da regra ao modelo, não no conteúdo da regra.
+
+Arquivos: `backend/src/agents/shared/agent.prompt.ts` (novo),
+`agent.handoff.ts`, `commercial.service.ts`, `commercial.schema.ts`,
+`commercial.scoring.ts`, `support.service.ts`, `router/agent.router.ts`,
+`router/intent.classifier.ts`, `knowledge/knowledge.repository.ts`,
+`config/env.ts`, `integrations/n8n-agent/n8n-agent.routes.ts`,
+`testing/test-chat.routes.ts`, `scripts/ingest-knowledge.ts`,
+`tests/unit/commercial.scoring.smoke.ts`, `agents/**/*.md`, `.env.example`,
+`docs/decisions/ADR-013-rules-in-prompt-rag-facts-only.md`
+
+Impacto: **exige `npm run ingest:knowledge`** no deploy pra limpar da base os
+chunks de prompt/regra da ingestão antiga. `AGENT_TEMPERATURE` e
+`KNOWLEDGE_MIN_SIMILARITY` têm default no código — não bloqueiam deploy se não
+forem definidas no EasyPanel. Fluxo n8n e webhook não foram alterados.
+
 ## [2026-07-23] - M1: correções fase 2 no agente comercial (auditoria + atendimentos reais)
 
 O que: corrige fato errado sobre a aula experimental (sempre individual,

@@ -1,9 +1,42 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const AGENTS_DIR = resolve(__dirname, '../../../agents');
+
+/**
+ * Acha a raiz do backend subindo o diretório até encontrar quem tem
+ * `package.json` **e** `agents/` juntos.
+ *
+ * Path relativo fixo não serve: em dev o código roda de `src/agents/shared/` e
+ * em produção de `dist/src/agents/shared/`, então a profundidade até a raiz
+ * muda. Qualquer `../../..` acerta um ambiente e quebra o outro — foi
+ * exatamente o que aconteceu: o path foi "corrigido" de 4 pra 3 níveis, passou
+ * a funcionar local e derrubou o container, porque `readFileSync` acontece no
+ * import → o app não sobe → o n8n recebe 502 ao chamar o agente.
+ *
+ * Checar só a existência de `agents/` não bastaria: `src/agents/` e
+ * `dist/src/agents/` (código compilado) casariam antes da raiz de verdade.
+ */
+function findBackendRoot(startDir: string): string {
+  let current = startDir;
+
+  for (;;) {
+    if (existsSync(resolve(current, 'package.json')) && existsSync(resolve(current, 'agents'))) {
+      return current;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      throw new Error(
+        `não encontrei a raiz do backend (dir com package.json + agents/) subindo de ${startDir}`,
+      );
+    }
+    current = parent;
+  }
+}
+
+const AGENTS_DIR = resolve(findBackendRoot(__dirname), 'agents');
 
 /**
  * Monta o system prompt juntando os arquivos de regra de `agents/`.

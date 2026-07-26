@@ -1,17 +1,17 @@
-import { openai } from '../../config/openai.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import type { Contact } from '../../crm/leads/contacts.repository.js';
 import type { AgentTurnResult } from '../shared/agent.types.js';
 import { getChatHistory, appendChatMessage } from '../shared/agent.memory.redis.js';
 import { getOrCreateConversation, appendConversationTurn } from '../shared/agent.memory.pg.js';
-import { buildMessages } from '../shared/agent.context.js';
+import { buildMessages, lastAssistantReply } from '../shared/agent.context.js';
 import { composeSystemPrompt, withKnowledgeContext } from '../shared/agent.prompt.js';
+import { completeStructuredTurn } from '../shared/agent.completion.js';
 import { commercialTurnSchema, commercialResponseJsonSchema } from './commercial.schema.js';
 import { EMPTY_COLLECTED_DATA, mergeCollectedData } from './commercial.schema.js';
 import type { PriceTableVariant, CommercialCollectedData } from './commercial.schema.js';
-import { scoreLead, shouldHandoff } from './commercial.scoring.js';
-import { notifyGi } from '../shared/agent.handoff.js';
+import { scoreLead, decideHandoff, canSendPriceTable } from './commercial.scoring.js';
+import { notifyGi, claimHandoffAlert } from '../shared/agent.handoff.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
 import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
 
@@ -60,19 +60,15 @@ export async function runCommercialTurn(
   let turnFailed = false;
 
   try {
-    const completion = await openai.chat.completions.create({
+    const turn = await completeStructuredTurn({
+      label: 'commercial',
       model: env.OPENAI_MODEL_COMMERCIAL,
       messages,
-      temperature: env.AGENT_TEMPERATURE,
-      max_tokens: env.OPENAI_MAX_TOKENS,
-      response_format: {
-        type: 'json_schema',
-        json_schema: commercialResponseJsonSchema,
-      },
+      jsonSchema: commercialResponseJsonSchema,
+      parse: (raw) => commercialTurnSchema.parse(raw),
+      replyOf: (parsed) => parsed.reply,
+      lastAssistantReply: lastAssistantReply(history),
     });
-
-    const raw = completion.choices[0]?.message?.content ?? '{}';
-    const turn = commercialTurnSchema.parse(JSON.parse(raw));
 
     const messageCount = conversation.messages.length + 2;
     // Score sobre o acumulado da conversa, não só sobre o turno atual: o modelo
@@ -81,8 +77,15 @@ export async function runCommercialTurn(
     collectedData = mergeCollectedData(conversation.collected_data, turn.collected_data);
     leadScore = scoreLead(collectedData, messageCount);
     reply = sanitizeOutgoingText(turn.reply);
-    sendPriceTable = turn.send_price_table;
     priceTableVariant = turn.price_table_variant;
+
+    sendPriceTable = canSendPriceTable(turn.send_price_table, collectedData);
+
+    if (turn.send_price_table && !sendPriceTable) {
+      logger.warn('price table suppressed: lead has not asked about price yet', {
+        contactId: contact.id,
+      });
+    }
 
     await appendConversationTurn(conversation, message, reply, leadScore, collectedData);
   } catch (err) {
@@ -100,30 +103,68 @@ export async function runCommercialTurn(
 
   // A resposta de fallback promete ao lead que a equipe vai responder — então
   // precisa gerar handoff de verdade. Antes o turno falhava, o lead recebia a
-  // promessa e ninguém era avisado.
-  const handoff = turnFailed || shouldHandoff(leadScore, collectedData);
+  // promessa e ninguém era avisado. `pauseAi` decide se a IA sai da conversa:
+  // só pedido explícito cala o agente (ver `decideHandoff`).
+  const decision = decideHandoff(leadScore, collectedData, turnFailed);
 
-  if (handoff && options.notifyHandoff !== false) {
-    await notifyGi(contact.id, contact.phone, handoffReason(turnFailed, collectedData), reply, {
-      Nome: collectedData.full_name ?? contact.name,
-      'E-mail': collectedData.email,
-      Idioma: collectedData.interested_course,
-      Objetivo: collectedData.objective,
-      Disponibilidade: collectedData.availability,
-      Urgência: collectedData.urgency,
-      Origem: collectedData.lead_source,
-      Score: turnFailed ? null : leadScore,
-    });
+  if (decision.handoff && options.notifyHandoff !== false) {
+    await alertGi(decision, contact, collectedData, leadScore, reply, turnFailed);
   }
 
   // Quem chama decide QUANDO entregar a tabela (imagem só pode ir depois do
   // texto ter sido enviado de verdade — ver ADR-012). Esta função só sinaliza.
-  return { reply, leadScore, handoff, sendPriceTable, priceTableVariant };
+  return {
+    reply,
+    leadScore,
+    handoff: decision.handoff,
+    pauseAi: decision.pauseAi,
+    sendPriceTable,
+    priceTableVariant,
+  };
 }
 
-function handoffReason(turnFailed: boolean, data: CommercialCollectedData): string {
-  if (turnFailed) return 'Falha técnica no agente — lead precisa de resposta humana!';
-  if (data.wants_to_schedule) return 'Lead quer agendar aula experimental!';
-  if (data.needs_human) return 'Lead pediu atendimento humano!';
-  return 'Lead quente!';
+/**
+ * Alerta pra Gi nunca derruba o turno: `notifyGi` faz update no Supabase e
+ * manda WhatsApp, e qualquer um dos dois pode falhar. Como a chamada acontece
+ * depois da resposta pronta, uma exceção aqui virava 500 no endpoint e o lead
+ * ficava sem receber a resposta que já estava gerada.
+ */
+async function alertGi(
+  decision: ReturnType<typeof decideHandoff>,
+  contact: Contact,
+  collectedData: CommercialCollectedData,
+  leadScore: number,
+  reply: string,
+  turnFailed: boolean,
+): Promise<void> {
+  // Handoff que não pausa a IA repetiria o alerta a cada mensagem seguinte.
+  if (!decision.pauseAi) {
+    const kind = turnFailed ? 'turn_failed' : 'hot_lead';
+    if (!(await claimHandoffAlert(contact.id, kind))) return;
+  }
+
+  try {
+    await notifyGi(
+      contact.id,
+      contact.phone,
+      decision.reason,
+      reply,
+      {
+        Nome: collectedData.full_name ?? contact.name,
+        'E-mail': collectedData.email,
+        Idioma: collectedData.interested_course,
+        Objetivo: collectedData.objective,
+        Disponibilidade: collectedData.availability,
+        Urgência: collectedData.urgency,
+        Origem: collectedData.lead_source,
+        Score: turnFailed ? null : leadScore,
+      },
+      { pauseAi: decision.pauseAi },
+    );
+  } catch (err) {
+    logger.error('handoff alert failed, reply still delivered', {
+      contactId: contact.id,
+      errorMessage: (err as Error).message,
+    });
+  }
 }

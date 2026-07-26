@@ -9,6 +9,114 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-07-25] - M1+M2: agente parava de responder, emoji em excesso e `---` na mensagem
+
+O que:
+1. **Silêncio permanente eliminado (ADR-014).** `notifyGi` pausava a IA
+   (`pausar_ia='Sim'`) em todo handoff e não existe rotina de resume
+   implementada (`SCHEDULE_RESUME_HOUR` nunca foi usada) — silêncio até alguém
+   editar o Supabase à mão. Agora `decideHandoff` separa "avisar a Gi" de
+   "calar a IA".
+   **Regra de pausa no comercial (definida pelo usuário):** a IA só sai da
+   conversa, por **1 dia**, quando o lead está **qualificado** (idioma +
+   objetivo, `isQualifiedLead`) **e** **aceitou falar com um consultor**
+   (`accepted_consultant`, `needs_human` ou `wants_to_schedule`). Aceitou mas
+   ainda não qualificado → avisa a Gi e a IA continua fechando idioma/objetivo.
+   Score ≥ 9 e falha técnica só alertam. Campo novo `accepted_consultant` no
+   `collected_data` (com trava), documentado em `prompt-v1.md`,
+   `handoff-rules.md` e `scoring-rules.md`. No suporte a escalação continua
+   pausando (é sempre pedido real de uma pessoa), com o mesmo prazo de 1 dia.
+2. **Falha transitória não muta mais o contato.** Um 429/timeout da OpenAI
+   entrava no handoff e pausava pra sempre. Agora `completeStructuredTurn`
+   retenta (`AGENT_COMPLETION_ATTEMPTS=2`), cobrindo erro de API, JSON
+   inválido, resposta truncada (`finish_reason=length`) e repetição literal da
+   última mensagem.
+3. **Auto-bloqueio pelo próprio eco.** Toda resposta enviada pela UAZAPI volta
+   no webhook como `fromMe: true` e chamava `setBlock` (1 h de silêncio). Agora
+   `wasSentByApi` distingue eco de API de digitação humana.
+4. **`shouldReactivate` virou fail-open** — erro/timeout do classificador
+   respondia com silêncio; agora responde. Só cala com encerramento claro
+   ("ok", "valeu", emoji sozinho), decidido sem chamar modelo.
+5. **`pausar_ia` expira** em `AGENT_PAUSE_MAX_HOURS` (**24 h**), prazo
+   absoluto: `markPauseStart` carimba o início em Redis
+   (`pause_until:<contactId>`) e `/api/v1/n8n-agent/run` destrava. Precisa ser
+   absoluto porque `contacts.updated_at` desliza a cada dúvida respondida
+   durante a pausa (snap-back do ADR-011) — o contato nunca destravaria.
+   Sem carimbo (pausa manual no CRM) o fallback é `updated_at`.
+6. **Alerta pra Gi não derruba mais o turno** (era `await` fora do `try`:
+   Supabase/UAZAPI falhando = 500 e lead sem a resposta já gerada). Falha de
+   áudio/imagem também deixou de virar 500 — responde pedindo texto.
+7. **Emoji limitado de verdade.** Os exemplos dentro dos prompts terminavam em
+   😊 (11 no total) — few-shot ensinando emoji em toda bolha. Emoji removido
+   dos exemplos, regra virou numérica ("máximo 1 por resposta, normalmente
+   zero") e `sanitizeOutgoingText` corta o excedente (`AGENT_MAX_EMOJIS=1`),
+   por resposta e não por bolha.
+8. **`---` e markdown fora da mensagem.** `composeSystemPrompt` juntava as
+   seções com `\n\n---\n\n` + `<!-- fonte: ... -->` e o prompt explicava isso
+   pro modelo, que copiava; `fractureMessage` transformava a linha `---` em
+   bolha. Agora as seções vão em `<regras fonte="...">`, o sanitizador remove
+   separador/`#`/`**`/crase/comentário HTML (e converte `**x**` → `*x*`), e o
+   fracionador descarta fragmento que é só separador.
+9. **Fracionamento melhor**: quebra em qualquer linha (URL nunca é partida,
+   não contém quebra de linha), funde bolha minúscula na anterior e respeita
+   `AGENT_MAX_BUBBLES=5`.
+10. **Tabela de preço só depois do lead pedir preço.** O passo 4 do
+    `prompt-v1.md` foi reescrito como algoritmo de 4 linhas (havia duas
+    formulações competindo do mesmo gate) e ganhou o falso positivo mais comum
+    escrito na cara: "dizer que prefere particular ou turma NÃO é pedir preço".
+    Só com prompt a aderência foi de 0/3 pra 2/3 rodadas de eval; a garantia
+    final é `canSendPriceTable` — `send_price_table` do modelo só vale com
+    `price_asked=true` no acumulado. Também: `persona.md` passou a exigir a
+    pergunta do nome já na primeira resposta.
+11. **Webhook legado endurecido**: dedupe por `message.id` (retentativa da
+    UAZAPI virava resposta dobrada), grupo ignorado, ACK imediato com
+    processamento em background (a espera de 18 s estourava o timeout do
+    webhook), histórico passando pro `routeAgent` (o parâmetro existia e era
+    ignorado) e `joinMessages` desempatando por `message.id` em vez de por
+    texto (duas mensagens iguais respondiam as duas).
+
+Por que: os três sintomas relatados ("para de responder do nada", "emoji toda
+hora", "manda `---`") eram todos determinísticos no código, não estocásticos do
+modelo — cinco caminhos independentes levavam a silêncio sem intervenção
+humana, e a formatação não tinha nenhuma barreira determinística.
+
+Arquivos: `backend/src/shared/text-sanitizer.ts`,
+`backend/src/agents/shared/agent.fracture.ts`,
+`backend/src/agents/shared/agent.completion.ts` (novo),
+`backend/src/agents/shared/agent.dedupe.ts` (novo),
+`backend/src/agents/shared/agent.prompt.ts`,
+`backend/src/agents/shared/agent.context.ts`,
+`backend/src/agents/shared/agent.handoff.ts`,
+`backend/src/agents/shared/agent.message-join.ts`,
+`backend/src/agents/shared/agent.reactivation.ts`,
+`backend/src/agents/shared/agent.types.ts`,
+`backend/src/agents/commercial/commercial.scoring.ts`,
+`backend/src/agents/commercial/commercial.service.ts`,
+`backend/src/agents/support/support.service.ts`,
+`backend/src/integrations/n8n-agent/n8n-agent.routes.ts`,
+`backend/src/whatsapp/uazapi/uazapi.webhook.ts`,
+`backend/src/whatsapp/uazapi/uazapi.schema.ts`,
+`backend/src/crm/leads/contacts.repository.ts`, `backend/src/config/env.ts`,
+`backend/agents/commercial/prompt-v1.md`,
+`backend/agents/commercial/objections.md`, `backend/agents/shared/persona.md`,
+`backend/agents/shared/forbidden-phrases.md`,
+`backend/agents/support/prompt-v1.md`, `.env.example`,
+`docs/decisions/ADR-014-agent-silence-and-output-hygiene.md`,
+testes: `tests/unit/text-sanitizer.smoke.ts`,
+`tests/unit/agent.fracture.smoke.ts`, `tests/unit/agent.completion.smoke.ts`,
+`tests/unit/commercial.scoring.smoke.ts`, `tests/e2e/commercial.eval.ts`.
+
+Impacto: a IA passa a permanecer na conversa depois de "lead quente" — se a Gi
+assumir pelo WhatsApp no caminho do n8n, não há evento `fromMe` chegando ao
+backend (o filtro é no n8n), então IA e Gi podem responder em paralelo até
+alguém marcar `pausar_ia` no CRM. Fechar isso pede o n8n repassando
+`fromMe`/`wasSentByApi` pro backend (próxima sessão). O webhook legado passou a
+responder `{status:'accepted'}` antes de processar (não devolve mais
+`leadScore`). Novas vars: `AGENT_COMPLETION_ATTEMPTS`, `AGENT_MAX_EMOJIS`,
+`AGENT_MAX_BUBBLES`, `AGENT_PAUSE_MAX_HOURS` — todas com default, nenhuma
+obrigatória. O split de blocos no n8n deve passar a quebrar por linha (não só
+por linha em branco) pra bater com a saída nova.
+
 ## [2026-07-24] - M1+M2: revisão completa do agente (qualificação, entrega de regra, handoff)
 
 O que:

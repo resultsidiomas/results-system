@@ -15,6 +15,8 @@ export const commercialTurnSchema = z.object({
     has_tried_before: z.boolean().nullable(),
     price_asked: z.boolean().nullable(),
     wants_to_schedule: z.boolean().nullable(),
+    /** Lead disse "sim" pra falar com um consultor da equipe — ver ADR-014. */
+    accepted_consultant: z.boolean().nullable(),
     lead_source: z.string().nullable(),
     full_name: z.string().nullable(),
     email: z.string().nullable(),
@@ -33,6 +35,7 @@ export const EMPTY_COLLECTED_DATA: CommercialCollectedData = {
   has_tried_before: null,
   price_asked: null,
   wants_to_schedule: null,
+  accepted_consultant: null,
   lead_source: null,
   full_name: null,
   email: null,
@@ -44,7 +47,12 @@ export const EMPTY_COLLECTED_DATA: CommercialCollectedData = {
  * costuma omitir/zerar esses campos em turnos seguintes, e sem trava o score
  * oscilava e o handoff virava sorteio.
  */
-const LATCHING_FLAGS = ['price_asked', 'wants_to_schedule', 'needs_human'] as const;
+const LATCHING_FLAGS = [
+  'price_asked',
+  'wants_to_schedule',
+  'accepted_consultant',
+  'needs_human',
+] as const;
 
 /**
  * Junta o que já foi coletado antes com o que veio no turno atual.
@@ -93,6 +101,7 @@ export const commercialResponseJsonSchema = {
           has_tried_before: { type: ['boolean', 'null'] },
           price_asked: { type: ['boolean', 'null'] },
           wants_to_schedule: { type: ['boolean', 'null'] },
+          accepted_consultant: { type: ['boolean', 'null'] },
           lead_source: { type: ['string', 'null'] },
           full_name: { type: ['string', 'null'] },
           email: { type: ['string', 'null'] },
@@ -106,6 +115,7 @@ export const commercialResponseJsonSchema = {
           'has_tried_before',
           'price_asked',
           'wants_to_schedule',
+          'accepted_consultant',
           'lead_source',
           'full_name',
           'email',

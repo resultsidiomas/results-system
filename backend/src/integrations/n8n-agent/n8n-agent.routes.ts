@@ -4,11 +4,13 @@ import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import { HttpError, BadRequestError, UnauthorizedError } from '../../shared/http-errors.js';
 import { findOrCreateContact, updatePausarIa } from '../../crm/leads/contacts.repository.js';
+import type { Contact } from '../../crm/leads/contacts.repository.js';
 import { routeAgent } from '../../agents/router/agent.router.js';
 import { getChatHistory } from '../../agents/shared/agent.memory.redis.js';
 import { runCommercialTurn } from '../../agents/commercial/commercial.service.js';
 import { runSupportTurn } from '../../agents/support/support.service.js';
 import { shouldReactivate } from '../../agents/shared/agent.reactivation.js';
+import { isPauseExpired, clearPauseStart } from '../../agents/shared/agent.pause.js';
 import { sendPriceTableImage } from '../../whatsapp/uazapi/uazapi.sender.js';
 import { PRICE_TABLE_VARIANTS } from '../../agents/commercial/commercial.schema.js';
 
@@ -40,7 +42,9 @@ interface RunResult {
   sendPriceTable: boolean;
   priceTableVariant: string | null;
   handoff: boolean;
+  pauseAi: boolean;
 }
+
 
 async function runRoutedTurn(
   contact: Awaited<ReturnType<typeof findOrCreateContact>>,
@@ -56,7 +60,13 @@ async function runRoutedTurn(
 
   if (agentType === 'support') {
     const turn = await runSupportTurn(contact, instanceName, remoteJid, message, { notifyHandoff });
-    return { reply: turn.reply, sendPriceTable: false, priceTableVariant: null, handoff: turn.handoff };
+    return {
+      reply: turn.reply,
+      sendPriceTable: false,
+      priceTableVariant: null,
+      handoff: turn.handoff,
+      pauseAi: turn.pauseAi,
+    };
   }
 
   const turn = await runCommercialTurn(contact, instanceName, remoteJid, message, { notifyHandoff });
@@ -65,6 +75,7 @@ async function runRoutedTurn(
     sendPriceTable: turn.sendPriceTable,
     priceTableVariant: turn.sendPriceTable ? turn.priceTableVariant : null,
     handoff: turn.handoff,
+    pauseAi: turn.pauseAi,
   };
 }
 
@@ -83,12 +94,21 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
     const senderName = readString(contexto, 'senderName') || readString(contexto, 'chatName');
     const instanceName = readString(contexto, 'instanceName') || env.UAZAPI_INSTANCE;
 
-    let contact;
+    let contact: Contact;
     try {
       contact = await findOrCreateContact(phone, senderName);
     } catch (err) {
       logger.error('n8n-agent contact lookup failed', { sessionId, errorMessage: (err as Error).message });
       throw new HttpError(502, 'falha ao identificar contato');
+    }
+
+    // Pausa tem prazo (AGENT_PAUSE_MAX_HOURS = 1 dia). Sem isso `pausar_ia`
+    // nunca destrava sozinha — não existe rotina de resume implementada.
+    if (contact.pausar_ia === 'Sim' && (await isPauseExpired(contact.id, contact.updated_at))) {
+      logger.info('pausa expirou, IA reassume o contato', { sessionId });
+      await updatePausarIa(contact.id, 'Não');
+      await clearPauseStart(contact.id);
+      contact = { ...contact, pausar_ia: 'Não' as const };
     }
 
     if (contact.pausar_ia === 'Sim') {
@@ -121,7 +141,9 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
     }
 
     const result = await runRoutedTurn(contact, instanceName, remoteJid, message, true);
-    const pausarIa = result.handoff ? 'Sim' : 'Não';
+    // `handoff` só significa "Gi foi avisada" — não implica mais silêncio.
+    // Score alto/falha técnica alertam a Gi e a IA continua na conversa.
+    const pausarIa = result.pauseAi ? 'Sim' : 'Não';
 
     return reply.send({
       reply: result.reply,

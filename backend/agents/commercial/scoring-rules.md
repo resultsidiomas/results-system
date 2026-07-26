@@ -30,11 +30,28 @@ já coletados em turnos seguintes, e pontuar turno a turno fazia o score
 cair e o handoff virar sorteio. `price_asked`, `wants_to_schedule` e
 `needs_human` são travas: uma vez `true`, nunca voltam pra `false`.
 
-`wants_to_schedule`, `needs_human` e `lead_source` **não entram nessa
-soma** — os dois primeiros são regra própria de handoff (ver
-`commercial/handoff-rules.md`), o terceiro é só dado de CRM.
+`wants_to_schedule`, `accepted_consultant`, `needs_human` e `lead_source`
+**não entram nessa soma** — os três primeiros são regra própria de handoff
+(ver `commercial/handoff-rules.md`), o último é só dado de CRM.
 `shouldHandoff(score, collectedData)`: `true` se `score >= 9` **ou**
 `wants_to_schedule === true` **ou** `needs_human === true`.
+
+### Tabela de preço tem trava em código (ADR-014)
+
+`canSendPriceTable(modelWantsToSend, data)`: o `send_price_table=true` do
+modelo só vale se `price_asked === true` no acumulado da conversa. O modelo
+confundia "prefiro aula particular" com pedido de preço em cerca de 1 de cada
+3 conversas de teste, mesmo com o algoritmo explícito no `prompt-v1.md` passo
+4 — mandar proposta antes de o lead pedir atropela a etapa de conexão.
+
+### Score não pausa mais a IA (ADR-014)
+
+`decideHandoff(score, data, turnFailed)` devolve `{ handoff, pauseAi }`.
+Score ≥ 9 gera **alerta** pra Gi, não silêncio. A IA só sai da conversa
+(`pauseAi=true`, 1 dia) quando o lead está **qualificado**
+(`isQualifiedLead`: idioma + objetivo) **e** aceitou falar com um consultor
+(`acceptedConsultant`: `accepted_consultant`, `needs_human` ou
+`wants_to_schedule`). Regra definida pelo usuário em 2026-07-25.
 
 ## Ordem de coleta observada nos atendimentos reais
 

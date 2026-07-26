@@ -1,15 +1,47 @@
 ## Quando escalar pra Gi (handoff)
 
+> **Avisar a Gi ≠ calar a IA** (ADR-014). São duas decisões separadas:
+> `decideHandoff` devolve `handoff` (manda alerta) e `pauseAi` (grava
+> `pausar_ia='Sim'`).
+>
+> **A IA só para de responder quando as duas condições valem juntas:**
+> 1. **lead qualificado** — idioma (`interested_course`) **e** objetivo
+>    (`objective`) coletados; e
+> 2. **lead aceitou falar com um consultor** — `accepted_consultant=true`, ou
+>    `needs_human=true` (pediu humano por conta própria), ou
+>    `wants_to_schedule=true` (topou a experimental, que é um consultor quem
+>    fecha).
+>
+> Nesse caso a pausa dura **1 dia** (`AGENT_PAUSE_MAX_HOURS=24`, prazo
+> absoluto contado do handoff) e depois a IA reassume sozinha — antes a pausa
+> era permanente, porque a rotina de resume nunca foi implementada.
+>
+> Em **todo** o resto, o alerta vai pra Gi e a **IA continua respondendo**.
+> Decisão do usuário em 2026-07-25.
+
 ### Automático (já implementado em código)
-- Lead score ≥ 9 (`commercial.scoring.ts` + `agent.handoff.ts`) —
-  `pausar_ia = 'Sim'` no contato, IA para de responder, alerta enviado pro
-  `GI_ALERT_NUMBER` se configurado. O alerta leva nome, e-mail, idioma,
+- Lead score ≥ 9 (`commercial.scoring.ts` + `agent.handoff.ts`) — alerta
+  enviado pro `GI_ALERT_NUMBER` se configurado, **sem pausar a IA**: score é
+  inferência de temperatura, não pedido do lead, e pausar aqui emudecia o
+  agente no meio da qualificação. O alerta leva nome, e-mail, idioma,
   objetivo, disponibilidade, urgência, origem e score, pra Gi assumir a
-  conversa já sabendo com quem está falando.
+  conversa já sabendo com quem está falando. Máximo de 1 alerta desses por
+  dia por contato (o score fica ≥ 9 pra sempre depois de atingido).
 - Falha técnica no turno (erro de API/parse): o agente responde o fallback
   prometendo que a equipe vai responder — então gera handoff de verdade,
-  com motivo "Falha técnica no agente". Sem isso o lead recebia a promessa
+  com motivo "Falha técnica no agente" (também **sem pausar**: o próximo
+  turno pode funcionar normalmente). Sem isso o lead recebia a promessa
   e ninguém era avisado.
+
+### Lead aceitou falar com um consultor — `accepted_consultant = true`
+Marcar assim que o lead disser sim ao convite pra falar com um consultor da
+equipe (ou pedir isso espontaneamente). Combinado com lead qualificado
+(idioma + objetivo), é **o único caminho normal que tira a IA da conversa**:
+`pausar_ia='Sim'` por 1 dia. Se o lead aceitar antes de estar qualificado, a
+Gi é avisada mesmo assim, mas a IA **continua** conversando pra fechar idioma
+e objetivo — passar um lead cru pro consultor obriga a equipe a recomeçar do
+zero. O convite pro consultor só deve ser feito depois de idioma + objetivo
+(ver `prompt-v1.md` § "Perguntas de oferta").
 
 ### Deve gerar handoff mesmo com score baixo — `needs_human = true`
 Situações abaixo o modelo marca `needs_human = true` no `collected_data`, o

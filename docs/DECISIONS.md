@@ -15,5 +15,6 @@
 | ADR-011 | Reativação da IA durante pausar_ia='Sim' | Aceito |
 | ADR-012 | Ordem texto→tabela e tabela por variante de plano | Aceito |
 | ADR-013 | Regra de comportamento no system prompt, RAG só pra fato | Aceito |
+| ADR-014 | Fim do silêncio permanente do agente + higiene de saída (markdown/emoji) | Aceito |
 
 Ver arquivos em docs/decisions/

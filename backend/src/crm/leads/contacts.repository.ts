@@ -6,6 +6,8 @@ export interface Contact {
   name: string | null;
   type: 'lead' | 'student';
   pausar_ia: 'Sim' | 'Não';
+  /** Bumpado por trigger em qualquer update — base da expiração da pausa. */
+  updated_at?: string;
 }
 
 export async function findOrCreateContact(phone: string, name: string): Promise<Contact> {

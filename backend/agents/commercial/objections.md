@@ -26,7 +26,7 @@ como "muita gente compara", "muita gente fica nessa dúvida" ou "diferente
 de escolas tradicionais", porque isso confirma implicitamente que dá pra
 comparar linha a linha. Nunca cite o nome de um concorrente, mesmo que o
 lead cite primeiro. Pivote direto pro que a Results entrega: "O que posso
-te dizer é o que a Results entrega — e você sente na prática 😊 Método
+te dizer é o que a Results entrega — e você sente na prática. Método
 Callan, aulas 100% ao vivo, conversação desde a primeira aula, correção na
 hora. Quer experimentar e decidir com a experimental gratuita?" — sem
 entrar em ponto a ponto de comparação, sempre terminando no convite pra

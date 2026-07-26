@@ -33,7 +33,13 @@ async function run(message: string) {
     response_format: { type: 'json_schema', json_schema: supportResponseJsonSchema },
   });
 
-  return supportTurnSchema.parse(JSON.parse(completion.choices[0]?.message?.content ?? '{}'));
+  const turn = supportTurnSchema.parse(
+    JSON.parse(completion.choices[0]?.message?.content ?? '{}'),
+  );
+
+  assertPlainWhatsApp(turn.reply);
+
+  return turn;
 }
 
 let failures = 0;
@@ -44,6 +50,20 @@ function assert(label: string, pass: boolean, evidence?: string) {
 }
 
 const ABBREV_PATTERN = /\b(pra|pro|Prof\.|vc|tb|pq|blz)\b/i;
+const EMOJI = /\p{Extended_Pictographic}/gu;
+const SEPARATOR_LINE = /^\s*(?:[-*_=]\s*){3,}$/m;
+
+/** `reply` cru, antes do sanitizador — aqui se mede a regra do prompt (ADR-014). */
+function assertPlainWhatsApp(reply: string) {
+  assert('sem linha de separador (---)', !SEPARATOR_LINE.test(reply), reply);
+  assert('sem negrito markdown (**)', !reply.includes('**'), reply);
+  assert('sem cabeçalho markdown (#)', !/^\s{0,3}#{1,6}\s/m.test(reply), reply);
+  assert('sem crase/bloco de código', !reply.includes('`'), reply);
+  assert('sem tag <regras> vazando', !/<\/?regras/i.test(reply), reply);
+
+  const emojis = reply.match(EMOJI)?.length ?? 0;
+  assert(`no máximo 1 emoji (achei ${emojis})`, emojis <= 1, reply);
+}
 
 console.log('\n[1] esqueci a senha — link precisa sair inteiro (bug real: chegou "com/password-change-request")');
 {

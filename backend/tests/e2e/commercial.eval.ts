@@ -46,7 +46,15 @@ async function run(history: Turn[], message: string) {
     response_format: { type: 'json_schema', json_schema: commercialResponseJsonSchema },
   });
 
-  return commercialTurnSchema.parse(JSON.parse(completion.choices[0]?.message?.content ?? '{}'));
+  const turn = commercialTurnSchema.parse(
+    JSON.parse(completion.choices[0]?.message?.content ?? '{}'),
+  );
+
+  // Formato vale pra toda resposta, em todo cenário — o lead recebia bolha com
+  // `---` e emoji em cada mensagem.
+  assertPlainWhatsApp(turn.reply);
+
+  return turn;
 }
 
 let failures = 0;
@@ -54,6 +62,25 @@ let failures = 0;
 function assert(label: string, pass: boolean, evidence?: string) {
   if (!pass) failures++;
   console.log(`  ${pass ? 'PASS' : 'FAIL'} — ${label}${!pass && evidence ? `\n         > ${evidence}` : ''}`);
+}
+
+const EMOJI = /\p{Extended_Pictographic}/gu;
+const SEPARATOR_LINE = /^\s*(?:[-*_=]\s*){3,}$/m;
+
+/**
+ * Checa o `reply` cru do modelo, ANTES do sanitizador — o sanitizador limpa,
+ * mas se o modelo insiste em markdown é a regra do prompt que está falhando.
+ */
+function assertPlainWhatsApp(reply: string) {
+  assert('sem linha de separador (---)', !SEPARATOR_LINE.test(reply), reply);
+  assert('sem negrito markdown (**)', !reply.includes('**'), reply);
+  assert('sem cabeçalho markdown (#)', !/^\s{0,3}#{1,6}\s/m.test(reply), reply);
+  assert('sem crase/bloco de código', !reply.includes('`'), reply);
+  assert('sem tag <regras> vazando', !/<\/?regras/i.test(reply), reply);
+  assert('sem comentário HTML', !reply.includes('<!--'), reply);
+
+  const emojis = reply.match(EMOJI)?.length ?? 0;
+  assert(`no máximo 1 emoji (achei ${emojis})`, emojis <= 1, reply);
 }
 
 /** "19h", "19:00", "às 8h" — hora específica que a escola não confirmou. */
@@ -77,7 +104,7 @@ console.log('\n[2] lead entrega tudo de uma vez — não pode reperguntar');
       { role: 'user', content: 'oi' },
       {
         role: 'assistant',
-        content: 'Oi! Tudo bem? 😊 Sou a Jessica, da equipe da Results Idiomas. Qual é o seu nome?',
+        content: 'Oi! Tudo bem? Sou a Jessica, da equipe da Results Idiomas. Qual é o seu nome?',
       },
     ],
     'sou o Marcos. quero fazer inglês para uma viagem em dezembro, prefiro aula particular e de manhã',
@@ -97,6 +124,11 @@ console.log('\n[2] lead entrega tudo de uma vez — não pode reperguntar');
     /convers|correção|primeira aula|ritmo|revis/i.test(t.reply),
     t.reply,
   );
+  // Lead não pediu preço — tabela aqui atropela a etapa de conexão. Mede
+  // aderência do prompt: em produção `canSendPriceTable` suprime de qualquer
+  // forma (o envio exige `price_asked`), então uma falha aqui é ruído de tom,
+  // não tabela chegando indevidamente no WhatsApp do lead.
+  assert('não manda tabela sem o lead pedir preço', t.send_price_table === false, t.reply);
 }
 
 console.log('\n[3] preço com preferência já dita — manda tabela sem reperguntar');
@@ -149,6 +181,36 @@ console.log('\n[6] lead pede horário específico — não pode inventar');
   assert('não inventa horário', !HOUR_PATTERN.test(t.reply), t.reply);
   assert('remete à equipe', /equipe|responsáve|confirm/i.test(t.reply), t.reply);
   assert('marcou wants_to_schedule', t.collected_data.wants_to_schedule === true);
+}
+
+console.log('\n[7] lead pede a tabela de novo — não pode repetir a mesma frase');
+{
+  const jaMandou = 'Vou te mandar aqui nossa tabela de valores certinha';
+  const t = await run(
+    [
+      { role: 'user', content: 'quero inglês para trabalho, particular. quanto custa?' },
+      { role: 'assistant', content: jaMandou },
+      { role: 'user', content: 'não chegou aqui' },
+    ],
+    'pode mandar a tabela de novo?',
+  );
+  console.log(`  reply: ${JSON.stringify(t.reply)}`);
+  assert(
+    'não repete a frase anterior palavra por palavra',
+    t.reply.trim().toLowerCase() !== jaMandou.toLowerCase(),
+    t.reply,
+  );
+  assert('manda a tabela de novo', t.send_price_table === true);
+}
+
+console.log('\n[8] lead manda mensagem cheia de markdown — não pode espelhar');
+{
+  const t = await run(
+    [],
+    '**Olá!** quero saber sobre o curso de inglês\n---\n# meu objetivo é trabalho',
+  );
+  console.log(`  reply: ${JSON.stringify(t.reply)}`);
+  assert('capturou idioma', !!t.collected_data.interested_course, t.reply);
 }
 
 console.log(`\n${failures === 0 ? 'TODOS OS CHECKS PASSARAM' : `${failures} CHECK(S) FALHARAM`}`);

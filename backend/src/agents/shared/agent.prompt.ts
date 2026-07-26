@@ -56,14 +56,19 @@ const AGENTS_DIR = resolve(findBackendRoot(__dirname), 'agents');
  * Ordem importa: a parte estática vem primeiro e o CONTEXTO RELEVANTE
  * (dinâmico) é anexado depois, mantendo o prefixo estável e cacheável pelo
  * prompt caching da OpenAI.
+ *
+ * Delimitador é tag, não `---`: a versão anterior separava as seções com
+ * `\n\n---\n\n` e comentário HTML, e o modelo copiava isso pra dentro da
+ * resposta — o lead recebia uma bolha com `---` sozinho. Tag nomeada delimita
+ * igual sem ensinar markdown ao modelo.
  */
 export function composeSystemPrompt(sources: readonly string[]): string {
   return sources
     .map((source) => {
       const content = readFileSync(resolve(AGENTS_DIR, source), 'utf-8').trim();
-      return `<!-- fonte: agents/${source} -->\n${content}`;
+      return `<regras fonte="agents/${source}">\n${content}\n</regras>`;
     })
-    .join('\n\n---\n\n');
+    .join('\n\n');
 }
 
 /** Anexa o bloco de contexto recuperado da base de conhecimento, se houver. */

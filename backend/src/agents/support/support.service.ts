@@ -1,17 +1,17 @@
-import { openai } from '../../config/openai.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 import type { Contact } from '../../crm/leads/contacts.repository.js';
 import type { SupportTurnResult } from '../shared/agent.types.js';
 import { getChatHistory, appendChatMessage } from '../shared/agent.memory.redis.js';
 import { getOrCreateConversation, appendConversationTurn } from '../shared/agent.memory.pg.js';
-import { buildMessages } from '../shared/agent.context.js';
+import { buildMessages, lastAssistantReply } from '../shared/agent.context.js';
+import { completeStructuredTurn } from '../shared/agent.completion.js';
 import { composeSystemPrompt, withKnowledgeContext } from '../shared/agent.prompt.js';
 import { supportTurnSchema, supportResponseJsonSchema } from './support.schema.js';
 import type { EscalationReason } from './support.schema.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
 import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
-import { notifyGi } from '../shared/agent.handoff.js';
+import { notifyGi, claimHandoffAlert } from '../shared/agent.handoff.js';
 
 /**
  * Regra de comportamento vai toda no system prompt — nunca como referência a
@@ -64,21 +64,18 @@ export async function runSupportTurn(
   let reply: string;
   let handoff = false;
   let escalationReason: EscalationReason | null = null;
+  let turnFailed = false;
 
   try {
-    const completion = await openai.chat.completions.create({
+    const turn = await completeStructuredTurn({
+      label: 'support',
       model: env.OPENAI_MODEL_SUPPORT,
       messages,
-      temperature: env.AGENT_TEMPERATURE,
-      max_tokens: env.OPENAI_MAX_TOKENS,
-      response_format: {
-        type: 'json_schema',
-        json_schema: supportResponseJsonSchema,
-      },
+      jsonSchema: supportResponseJsonSchema,
+      parse: (raw) => supportTurnSchema.parse(raw),
+      replyOf: (parsed) => parsed.reply,
+      lastAssistantReply: lastAssistantReply(history),
     });
-
-    const raw = completion.choices[0]?.message?.content ?? '{}';
-    const turn = supportTurnSchema.parse(JSON.parse(raw));
 
     reply = sanitizeOutgoingText(turn.reply);
     handoff = turn.needs_human;
@@ -94,17 +91,53 @@ export async function runSupportTurn(
     reply = FALLBACK_REPLY;
     handoff = true;
     escalationReason = 'outro';
+    turnFailed = true;
   }
 
   await appendChatMessage(instance, remoteJid, { role: 'user', content: message, at: new Date().toISOString() });
   await appendChatMessage(instance, remoteJid, { role: 'assistant', content: reply, at: new Date().toISOString() });
 
+  // Escalação pedida de fato (reagendamento, cancelamento, reclamação) tira a
+  // IA da conversa; falha técnica não — o próximo turno pode funcionar, e
+  // pausar por causa de um 429 da OpenAI deixava o aluno mudo sem resume
+  // nenhum (ver ADR-014).
+  const pauseAi = handoff && !turnFailed;
+
   if (handoff && options.notifyHandoff !== false) {
-    await notifyGi(contact.id, contact.phone, ESCALATION_LABELS[escalationReason ?? 'outro'], reply, {
-      Nome: contact.name,
-      Tipo: contact.type === 'student' ? 'aluno matriculado' : 'lead',
-    });
+    await alertGi(contact, escalationReason, reply, pauseAi, turnFailed);
   }
 
-  return { reply, handoff, escalationReason };
+  return { reply, handoff, pauseAi, escalationReason };
+}
+
+/** Falha no alerta nunca derruba o turno — a resposta do aluno já está pronta. */
+async function alertGi(
+  contact: Contact,
+  escalationReason: EscalationReason | null,
+  reply: string,
+  pauseAi: boolean,
+  turnFailed: boolean,
+): Promise<void> {
+  if (!pauseAi && !(await claimHandoffAlert(contact.id, turnFailed ? 'turn_failed' : 'hot_lead'))) {
+    return;
+  }
+
+  try {
+    await notifyGi(
+      contact.id,
+      contact.phone,
+      ESCALATION_LABELS[escalationReason ?? 'outro'],
+      reply,
+      {
+        Nome: contact.name,
+        Tipo: contact.type === 'student' ? 'aluno matriculado' : 'lead',
+      },
+      { pauseAi },
+    );
+  } catch (err) {
+    logger.error('support handoff alert failed, reply still delivered', {
+      contactId: contact.id,
+      errorMessage: (err as Error).message,
+    });
+  }
 }

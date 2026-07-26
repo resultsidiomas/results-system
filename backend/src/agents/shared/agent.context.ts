@@ -20,3 +20,11 @@ export function buildMessages(
     { role: 'user', content: userMessage },
   ];
 }
+
+/** Última mensagem que a IA enviou nessa conversa — base da guarda de repetição. */
+export function lastAssistantReply(history: ChatMessage[]): string | null {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    if (history[i]?.role === 'assistant') return history[i]!.content;
+  }
+  return null;
+}

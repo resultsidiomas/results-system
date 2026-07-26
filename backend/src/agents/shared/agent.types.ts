@@ -10,7 +10,10 @@ export interface ChatMessage {
 export interface AgentTurnResult {
   reply: string;
   leadScore: number;
+  /** Gi foi avisada neste turno. */
   handoff: boolean;
+  /** IA sai da conversa até intervenção humana — só em pedido explícito. */
+  pauseAi: boolean;
   sendPriceTable: boolean;
   priceTableVariant: PriceTableVariant;
 }
@@ -18,5 +21,6 @@ export interface AgentTurnResult {
 export interface SupportTurnResult {
   reply: string;
   handoff: boolean;
+  pauseAi: boolean;
   escalationReason: EscalationReason | null;
 }

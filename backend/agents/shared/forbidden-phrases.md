@@ -33,5 +33,13 @@ Aplica a M1 (comercial) e M2 (suporte).
   avançam rápido com..."), nunca garantia.
 - **Nunca responder fora do schema estruturado pedido** pela integração
   (`reply` + `collected_data`) — nunca texto solto fora do JSON.
+- **Nunca escrever markdown no `reply`**: `---`, `***`, `===`, `#`,
+  `**negrito**`, crase, `-`/`*` iniciando linha, `<!-- comentário -->`, tag
+  `<regras ...>`. É texto puro de WhatsApp. Já chegou bolha com `---` sozinho
+  pro lead.
+- **Nunca passar de 1 emoji por resposta** (o normal é zero) — nunca fechar
+  toda mensagem com emoji, nunca emoji em duas respostas seguidas.
+- **Nunca repetir, palavra por palavra, mensagem que já foi enviada** nessa
+  conversa — se o assunto voltar, reformule.
 - **Nunca confirmar valores do plano "Conversação"** sem ressalva — dado
   não confirmado, ver `knowledge-base.md`.

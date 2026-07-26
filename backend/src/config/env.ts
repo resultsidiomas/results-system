@@ -12,6 +12,19 @@ const envSchema = z.object({
   // instável a regra rígida (abreviação, horário inventado, frase repetida).
   // 0.4 mantém naturalidade e segue o prompt. Classificadores usam 0 próprio.
   AGENT_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.4),
+  // Uma tentativa extra quando a chamada falha ou vem truncada. Sem isso, um
+  // 429/timeout único da OpenAI já entregava a resposta de fallback ("tive um
+  // problema técnico") e — pior — pausava a IA pro contato (ver ADR-014).
+  AGENT_COMPLETION_ATTEMPTS: z.coerce.number().int().min(1).max(4).default(2),
+  // Emoji por resposta (não por bolha). O modelo fechava toda mensagem com 😊
+  // porque os exemplos do prompt faziam isso; corte determinístico garante.
+  AGENT_MAX_EMOJIS: z.coerce.number().int().min(0).max(5).default(1),
+  // Teto de bolhas por resposta — acima disso o resto é fundido na última.
+  AGENT_MAX_BUBBLES: z.coerce.number().int().min(1).max(10).default(5),
+  // Duração da pausa após handoff: 1 dia (decisão do usuário, 2026-07-25).
+  // Prazo absoluto contado do momento da pausa; depois disso a IA reassume o
+  // contato sozinha — não existe rotina de resume implementada (ver ADR-014).
+  AGENT_PAUSE_MAX_HOURS: z.coerce.number().int().min(1).max(168).default(24),
 
   // Knowledge base / RAG (ADR-009)
   KNOWLEDGE_MATCH_COUNT: z.coerce.number().int().positive().default(4),

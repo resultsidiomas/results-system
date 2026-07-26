@@ -3,6 +3,7 @@ import {
   shouldHandoff,
   decideHandoff,
   isQualifiedLead,
+  acceptedConsultant,
   canSendPriceTable,
   HANDOFF_SCORE_THRESHOLD,
 } from '../../src/agents/commercial/commercial.scoring.js';
@@ -138,17 +139,37 @@ const aceitouCru = decideHandoff(0, { ...empty, accepted_consultant: true }, fal
 check('aceitou sem qualificar avisa a Gi', aceitouCru.handoff, true);
 check('aceitou sem qualificar NÃO pausa a IA', aceitouCru.pauseAi, false);
 
+// wants_to_schedule saiu da aceitação (decisão do usuário, 2026-07-25): o modelo
+// marca esse campo com sinal implícito ("de manhã seria melhor pra mim"), então
+// avisa a Gi (só ela confirma horário) mas não cala a IA.
 const wantsSchedule = decideHandoff(0, { ...qualificado, wants_to_schedule: true }, false);
-check('quer agendar (qualificado) avisa a Gi', wantsSchedule.handoff, true);
-check('quer agendar (qualificado) pausa a IA', wantsSchedule.pauseAi, true);
+check('quer agendar avisa a Gi', wantsSchedule.handoff, true);
+check('quer agendar NÃO pausa a IA (nem qualificado)', wantsSchedule.pauseAi, false);
 check('motivo do agendamento', wantsSchedule.reason, 'Lead quer agendar aula experimental!');
+check('alerta de agendamento tem freio próprio', wantsSchedule.alertKind, 'wants_schedule');
 
-const wantsScheduleCru = decideHandoff(0, { ...empty, wants_to_schedule: true }, false);
-check('quer agendar sem qualificar NÃO pausa', wantsScheduleCru.pauseAi, false);
+check(
+  'aceitação explícita ignora wants_to_schedule',
+  acceptedConsultant({ ...qualificado, wants_to_schedule: true }),
+  false,
+);
+check(
+  'accepted_consultant conta como aceitação',
+  acceptedConsultant({ ...empty, accepted_consultant: true }),
+  true,
+);
+check('needs_human conta como aceitação', acceptedConsultant({ ...empty, needs_human: true }), true);
+
+// Pausa não precisa de freio de alerta: a própria pausa impede o segundo.
+check('handoff que pausa não usa freio', aceitouQualificado.alertKind, null);
 
 const needsHuman = decideHandoff(0, { ...qualificado, needs_human: true }, false);
 check('pediu humano (qualificado) pausa a IA', needsHuman.pauseAi, true);
 check('motivo do pedido de humano', needsHuman.reason, 'Lead pediu atendimento humano!');
+
+const needsHumanCru = decideHandoff(0, { ...empty, needs_human: true }, false);
+check('pediu humano sem qualificar NÃO pausa', needsHumanCru.pauseAi, false);
+check('pediu humano sem qualificar avisa a Gi', needsHumanCru.handoff, true);
 
 const cold = decideHandoff(4, partial, false);
 check('lead frio não gera handoff', cold.handoff, false);

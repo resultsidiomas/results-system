@@ -7,14 +7,19 @@
 > **A IA só para de responder quando as duas condições valem juntas:**
 > 1. **lead qualificado** — idioma (`interested_course`) **e** objetivo
 >    (`objective`) coletados; e
-> 2. **lead aceitou falar com um consultor** — `accepted_consultant=true`, ou
->    `needs_human=true` (pediu humano por conta própria), ou
->    `wants_to_schedule=true` (topou a experimental, que é um consultor quem
->    fecha).
+> 2. **aceitação explícita de falar com uma pessoa** — `accepted_consultant=true`
+>    (disse sim ao convite) ou `needs_human=true` (pediu humano por conta
+>    própria).
 >
-> Nesse caso a pausa dura **1 dia** (`AGENT_PAUSE_MAX_HOURS=24`, prazo
-> absoluto contado do handoff) e depois a IA reassume sozinha — antes a pausa
-> era permanente, porque a rotina de resume nunca foi implementada.
+> `wants_to_schedule` **não** pausa (decisão do usuário, 2026-07-25): o modelo
+> marca esse campo com sinal implícito — na simulação bastou o lead responder
+> "de manhã seria melhor pra mim" —, e sinal implícito não é aceitação. Topar a
+> experimental **avisa** a Gi (só ela confirma horário real) e a IA segue na
+> conversa.
+>
+> Quando pausa, dura **1 dia** (`AGENT_PAUSE_MAX_HOURS=24`, prazo absoluto
+> contado do handoff) e depois a IA reassume sozinha — antes a pausa era
+> permanente, porque a rotina de resume nunca foi implementada.
 >
 > Em **todo** o resto, o alerta vai pra Gi e a **IA continua respondendo**.
 > Decisão do usuário em 2026-07-25.
@@ -35,13 +40,15 @@
 
 ### Lead aceitou falar com um consultor — `accepted_consultant = true`
 Marcar assim que o lead disser sim ao convite pra falar com um consultor da
-equipe (ou pedir isso espontaneamente). Combinado com lead qualificado
-(idioma + objetivo), é **o único caminho normal que tira a IA da conversa**:
-`pausar_ia='Sim'` por 1 dia. Se o lead aceitar antes de estar qualificado, a
-Gi é avisada mesmo assim, mas a IA **continua** conversando pra fechar idioma
-e objetivo — passar um lead cru pro consultor obriga a equipe a recomeçar do
-zero. O convite pro consultor só deve ser feito depois de idioma + objetivo
-(ver `prompt-v1.md` § "Perguntas de oferta").
+equipe. Combinado com lead qualificado (idioma + objetivo), é **o único
+caminho normal que tira a IA da conversa**: `pausar_ia='Sim'` por 1 dia.
+Aceitação tem que ser clara ("pode ser", "sim, quero falar") — interesse
+genérico ("legal", "vou pensar") ou preferência de horário **não** contam.
+Se o lead aceitar antes de estar qualificado, a Gi é avisada mesmo assim, mas
+a IA **continua** conversando pra fechar idioma e objetivo — passar um lead
+cru pro consultor obriga a equipe a recomeçar do zero. O convite pro consultor
+só deve ser feito depois de idioma + objetivo (ver `prompt-v1.md` §
+"Perguntas de oferta").
 
 ### Deve gerar handoff mesmo com score baixo — `needs_human = true`
 Situações abaixo o modelo marca `needs_human = true` no `collected_data`, o
@@ -79,11 +86,12 @@ confirmada com o usuário (2026-07-23, ver
 `docs/specs/2026-07-23-m1-commercial-agent-fase2-fixes-design.md`): o
 agente nunca oferece dia/hora fixo, só coleta preferência de turno/dias.
 Assim que o lead confirma que quer agendar, `wants_to_schedule=true` no
-turno — isso dispara handoff **imediato**, mesmo com score baixo
-(`commercial.scoring.ts` → `shouldHandoff(score, data)`), porque só um
+turno — isso **avisa a Gi imediatamente**, mesmo com score baixo, porque só um
 humano pode confirmar o horário real. Motivo enviado pra Gi: "Lead quer
-agendar aula experimental!" (diferente do motivo "Lead quente!" do
-handoff por score).
+agendar aula experimental!" (diferente do "Lead quente!" do alerta por score).
+**Não pausa a IA** (ADR-014): esse campo é marcado com sinal implícito, então a
+IA segue respondendo até o lead aceitar explicitamente falar com um consultor.
+Teto de 1 alerta desses por hora por contato.
 
 ### Origem do lead (`lead_source`)
 Não dispara handoff sozinho, mas é dado obrigatório pro CRM (canal que

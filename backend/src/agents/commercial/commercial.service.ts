@@ -137,10 +137,10 @@ async function alertGi(
   reply: string,
   turnFailed: boolean,
 ): Promise<void> {
-  // Handoff que não pausa a IA repetiria o alerta a cada mensagem seguinte.
-  if (!decision.pauseAi) {
-    const kind = turnFailed ? 'turn_failed' : 'hot_lead';
-    if (!(await claimHandoffAlert(contact.id, kind))) return;
+  // Handoff que não pausa a IA repetiria o alerta a cada mensagem seguinte —
+  // os campos que o disparam ficam `true` pro resto da conversa.
+  if (decision.alertKind !== null && !(await claimHandoffAlert(contact.id, decision.alertKind))) {
+    return;
   }
 
   try {

@@ -19,13 +19,17 @@ O que:
    "calar a IA".
    **Regra de pausa no comercial (definida pelo usuário):** a IA só sai da
    conversa, por **1 dia**, quando o lead está **qualificado** (idioma +
-   objetivo, `isQualifiedLead`) **e** **aceitou falar com um consultor**
-   (`accepted_consultant`, `needs_human` ou `wants_to_schedule`). Aceitou mas
-   ainda não qualificado → avisa a Gi e a IA continua fechando idioma/objetivo.
-   Score ≥ 9 e falha técnica só alertam. Campo novo `accepted_consultant` no
-   `collected_data` (com trava), documentado em `prompt-v1.md`,
-   `handoff-rules.md` e `scoring-rules.md`. No suporte a escalação continua
-   pausando (é sempre pedido real de uma pessoa), com o mesmo prazo de 1 dia.
+   objetivo, `isQualifiedLead`) **e** deu **aceitação explícita** de falar com
+   uma pessoa (`accepted_consultant` ou `needs_human`). Aceitou mas ainda não
+   qualificado → avisa a Gi e a IA continua fechando idioma/objetivo.
+   `wants_to_schedule` avisa a Gi (só ela confirma horário real) mas **não**
+   pausa: o modelo marca esse campo com sinal implícito — na simulação bastou
+   "de manhã seria melhor pra mim". Score ≥ 9 e falha técnica só alertam, com
+   teto de repetição por tipo (`alertKind`: quente 1×/dia, resto 1×/hora).
+   Campo novo `accepted_consultant` no `collected_data` (com trava),
+   documentado em `prompt-v1.md`, `handoff-rules.md` e `scoring-rules.md`. No
+   suporte a escalação continua pausando (é sempre pedido real de uma pessoa),
+   com o mesmo prazo de 1 dia.
 2. **Falha transitória não muta mais o contato.** Um 429/timeout da OpenAI
    entrava no handoff e pausava pra sempre. Agora `completeStructuredTurn`
    retenta (`AGENT_COMPLETION_ATTEMPTS=2`), cobrindo erro de API, JSON

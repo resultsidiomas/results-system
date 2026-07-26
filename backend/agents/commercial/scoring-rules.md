@@ -49,9 +49,10 @@ confundia "prefiro aula particular" com pedido de preço em cerca de 1 de cada
 `decideHandoff(score, data, turnFailed)` devolve `{ handoff, pauseAi }`.
 Score ≥ 9 gera **alerta** pra Gi, não silêncio. A IA só sai da conversa
 (`pauseAi=true`, 1 dia) quando o lead está **qualificado**
-(`isQualifiedLead`: idioma + objetivo) **e** aceitou falar com um consultor
-(`acceptedConsultant`: `accepted_consultant`, `needs_human` ou
-`wants_to_schedule`). Regra definida pelo usuário em 2026-07-25.
+(`isQualifiedLead`: idioma + objetivo) **e** aceitou explicitamente falar com
+uma pessoa (`acceptedConsultant`: `accepted_consultant` ou `needs_human`).
+`wants_to_schedule` avisa a Gi mas **não** pausa — é marcado com sinal
+implícito. Regra definida pelo usuário em 2026-07-25.
 
 ## Ordem de coleta observada nos atendimentos reais
 

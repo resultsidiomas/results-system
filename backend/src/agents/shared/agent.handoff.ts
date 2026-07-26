@@ -5,17 +5,26 @@ import { markPauseStart } from './agent.pause.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../shared/logger.js';
 
-/** Alerta de lead quente: no máximo um por dia por contato. */
-const HOT_LEAD_ALERT_TTL_SECONDS = 86_400;
-/** Alerta de falha técnica: no máximo um por hora por contato. */
-const FAILURE_ALERT_TTL_SECONDS = 3_600;
-
+/**
+ * Teto de repetição por tipo de alerta. Vale só pro handoff que **não** pausa a
+ * IA: quando pausa, a própria pausa impede o segundo alerta.
+ */
 const ALERT_TTL: Record<HandoffAlertKind, number> = {
-  hot_lead: HOT_LEAD_ALERT_TTL_SECONDS,
-  turn_failed: FAILURE_ALERT_TTL_SECONDS,
+  /** Score fica ≥ 9 pra sempre depois de atingido — 1 alerta por dia basta. */
+  hot_lead: 86_400,
+  /** Falha técnica pode se repetir; 1 por hora evita metralhar a Gi. */
+  turn_failed: 3_600,
+  /** Lead topou a experimental: a Gi precisa ver rápido, mas não a cada msg. */
+  wants_schedule: 3_600,
+  /** Aceitou consultor sem estar qualificado ainda. */
+  accepted_consultant: 3_600,
 };
 
-export type HandoffAlertKind = 'hot_lead' | 'turn_failed';
+export type HandoffAlertKind =
+  | 'hot_lead'
+  | 'turn_failed'
+  | 'wants_schedule'
+  | 'accepted_consultant';
 
 /**
  * `true` na primeira vez, `false` enquanto o alerta estiver "reservado".

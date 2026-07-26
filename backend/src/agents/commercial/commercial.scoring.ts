@@ -1,4 +1,5 @@
 import type { CommercialCollectedData } from './commercial.schema.js';
+import type { HandoffAlertKind } from '../shared/agent.handoff.js';
 
 /**
  * Antes era 7, e isso emudecia a IA no meio da qualificação: idioma(2) +
@@ -58,9 +59,20 @@ export interface HandoffDecision {
   /** Gravar `pausar_ia='Sim'` (IA sai da conversa até intervenção humana). */
   pauseAi: boolean;
   reason: string;
+  /**
+   * Categoria do alerta, usada pro teto de repetição (`claimHandoffAlert`).
+   * Alerta que não pausa precisa de freio próprio: os campos que o disparam
+   * ficam `true` pro resto da conversa e re-alertariam a cada mensagem.
+   */
+  alertKind: HandoffAlertKind | null;
 }
 
-const NO_HANDOFF: HandoffDecision = { handoff: false, pauseAi: false, reason: '' };
+const NO_HANDOFF: HandoffDecision = {
+  handoff: false,
+  pauseAi: false,
+  reason: '',
+  alertKind: null,
+};
 
 /**
  * Lead qualificado = núcleo da qualificação fechado (idioma + objetivo).
@@ -76,18 +88,18 @@ export function isQualifiedLead(data: CommercialCollectedData): boolean {
 }
 
 /**
- * Lead aceitou (ou pediu) falar com uma pessoa da equipe.
+ * Lead aceitou **explicitamente** falar com uma pessoa da equipe: disse sim ao
+ * convite (`accepted_consultant`) ou pediu atendimento humano por conta própria
+ * (`needs_human`).
  *
- * Três formas da mesma coisa: disse sim ao convite pra falar com um consultor,
- * pediu atendimento humano por conta própria, ou topou a aula experimental —
- * que é um consultor quem fecha, já que não existe integração de calendário.
+ * `wants_to_schedule` **não** entra aqui, por decisão do usuário (2026-07-25):
+ * o modelo marca esse campo com sinal implícito — na simulação bastou o lead
+ * responder "de manhã seria melhor pra mim" pra virar `true` —, e sinal
+ * implícito não é aceitação. Topar a experimental continua avisando a Gi (só
+ * ela confirma horário real), mas sem calar a IA.
  */
 export function acceptedConsultant(data: CommercialCollectedData): boolean {
-  return (
-    data.accepted_consultant === true ||
-    data.needs_human === true ||
-    data.wants_to_schedule === true
-  );
+  return data.accepted_consultant === true || data.needs_human === true;
 }
 
 /**
@@ -95,13 +107,16 @@ export function acceptedConsultant(data: CommercialCollectedData): boolean {
  * existe rotina de resume, todo handoff virava silêncio permanente pro contato.
  *
  * **Pausa (1 dia, `AGENT_PAUSE_MAX_HOURS`) exige as duas condições juntas:**
- * lead **qualificado** (idioma + objetivo) **e** **aceitou falar com um
- * consultor** — regra definida pelo usuário em 2026-07-25. Aí sim a conversa é
- * da pessoa, não da IA.
+ * lead **qualificado** (idioma + objetivo) **e** **aceitação explícita** de
+ * falar com um consultor — regra definida pelo usuário em 2026-07-25. Aí sim a
+ * conversa é da pessoa, não da IA.
  *
  * Todo o resto avisa a Gi e a IA **continua respondendo**:
  * - aceitou consultor mas ainda não está qualificado: a IA segue conversando e
- *   completando idioma/objetivo em vez de deixar o lead no vácuo.
+ *   completando idioma/objetivo em vez de entregar lead cru pra equipe.
+ * - `wants_to_schedule`: a Gi é avisada (só ela confirma horário real), mas o
+ *   campo é marcado com sinal implícito ("de manhã seria melhor pra mim"), e
+ *   sinal implícito não cala a IA.
  * - score ≥ 9: inferência de temperatura, não pedido do lead. Pausar aqui
  *   emudecia a IA no meio da qualificação.
  * - falha técnica: o fallback promete resposta humana (então avisa), mas o
@@ -118,32 +133,36 @@ export function decideHandoff(
       handoff: true,
       pauseAi: false,
       reason: 'Falha técnica no agente — lead precisa de resposta humana!',
+      alertKind: 'turn_failed',
     };
   }
 
-  const accepted = acceptedConsultant(data);
+  if (acceptedConsultant(data)) {
+    const qualified = isQualifiedLead(data);
+    const reason = data.needs_human === true
+      ? 'Lead pediu atendimento humano!'
+      : 'Lead aceitou falar com um consultor!';
 
-  if (accepted && isQualifiedLead(data)) {
-    return { handoff: true, pauseAi: true, reason: acceptedReason(data) };
+    return {
+      handoff: true,
+      pauseAi: qualified,
+      reason: qualified ? reason : `${reason} (ainda sem idioma/objetivo — IA segue qualificando)`,
+      alertKind: qualified ? null : 'accepted_consultant',
+    };
   }
 
-  if (accepted) {
+  if (data.wants_to_schedule === true) {
     return {
       handoff: true,
       pauseAi: false,
-      reason: `${acceptedReason(data)} (ainda sem idioma/objetivo — IA segue qualificando)`,
+      reason: 'Lead quer agendar aula experimental!',
+      alertKind: 'wants_schedule',
     };
   }
 
   if (score >= HANDOFF_SCORE_THRESHOLD) {
-    return { handoff: true, pauseAi: false, reason: 'Lead quente!' };
+    return { handoff: true, pauseAi: false, reason: 'Lead quente!', alertKind: 'hot_lead' };
   }
 
   return NO_HANDOFF;
-}
-
-function acceptedReason(data: CommercialCollectedData): string {
-  if (data.wants_to_schedule === true) return 'Lead quer agendar aula experimental!';
-  if (data.needs_human === true) return 'Lead pediu atendimento humano!';
-  return 'Lead aceitou falar com um consultor!';
 }

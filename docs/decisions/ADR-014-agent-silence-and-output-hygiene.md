@@ -58,18 +58,30 @@ de responder por 1 dia somente quando as duas condições valem juntas —**
 1. **lead qualificado** — `isQualifiedLead`: `interested_course` **e**
    `objective` coletados (mesmo gate que libera a tabela de preço; score não
    entra, porque score sobe por sinal lateral como "mais de 3 mensagens"); e
-2. **lead aceitou falar com um consultor** — `acceptedConsultant`:
-   `accepted_consultant=true` (disse sim ao convite), `needs_human=true` (pediu
-   humano por conta própria) ou `wants_to_schedule=true` (topou a experimental,
-   que é um consultor quem fecha, já que não há integração de calendário).
+2. **aceitação explícita de falar com uma pessoa** — `acceptedConsultant`:
+   `accepted_consultant=true` (disse sim ao convite) ou `needs_human=true`
+   (pediu humano por conta própria).
+
+`wants_to_schedule` **ficou fora da aceitação** (decisão do usuário depois de
+ver a simulação): o modelo marca esse campo com sinal implícito — bastou o lead
+responder "de manhã seria melhor pra mim" pra virar `true` —, e sinal implícito
+não pode calar a IA. Topar a experimental continua avisando a Gi na hora, já que
+só ela confirma horário real.
 
 | Gatilho | Avisa a Gi | Pausa a IA | Por quê |
 |---|---|---|---|
-| qualificado **+** aceitou consultor | sim | **sim (1 dia)** | a conversa passou a ser da pessoa |
-| aceitou consultor, ainda não qualificado | sim | não | IA segue fechando idioma/objetivo em vez de entregar lead cru |
+| qualificado **+** aceitação explícita | sim | **sim (1 dia)** | a conversa passou a ser da pessoa |
+| aceitação explícita, ainda não qualificado | sim | não | IA segue fechando idioma/objetivo em vez de entregar lead cru |
+| `wants_to_schedule` | sim | não | sinal implícito; só a Gi confirma horário |
 | score ≥ 9 | sim | não | heurística de temperatura, não pedido do lead |
 | falha técnica | sim | não | o próximo turno pode funcionar |
 | nada disso | não | não | — |
+
+Alerta que não pausa ganha teto de repetição por tipo (`decision.alertKind` →
+`claimHandoffAlert`): lead quente 1×/dia, agendamento/aceitação/falha 1×/hora.
+Sem isso o alerta repetiria a cada mensagem, porque os campos que o disparam
+ficam `true` pro resto da conversa (era `pausar_ia` que segurava o segundo
+alerta — risco previsto no ADR-011).
 
 No suporte (M2) a escalação é sempre pedido real de uma pessoa
 (reagendamento, cancelamento, reclamação) — lá o handoff continua pausando,
@@ -78,10 +90,8 @@ com o mesmo prazo de 1 dia; só falha técnica não pausa.
 Complementos:
 
 - `notifyGi(..., { pauseAi })` — pausa passou a ser opt-out explícito.
-- `claimHandoffAlert(contactId, kind)` (Redis `SET NX`) — handoff que não pausa
-  alertaria a cada mensagem seguinte (o score fica ≥ 9 pra sempre depois de
-  atingido; era `pausar_ia` que segurava o segundo alerta — risco previsto no
-  ADR-011). Teto: 1 alerta de lead quente/dia, 1 de falha técnica/hora.
+- `claimHandoffAlert(contactId, kind)` (Redis `SET NX`) — teto de repetição por
+  tipo de alerta, detalhado na tabela acima.
 - `pausar_ia` expira: `AGENT_PAUSE_MAX_HOURS` (default **24 h = 1 dia**),
   prazo **absoluto** contado do handoff. `markPauseStart` grava o instante em
   Redis (`pause_until:<contactId>`, TTL prazo + 7 dias) e `isPauseExpired` usa

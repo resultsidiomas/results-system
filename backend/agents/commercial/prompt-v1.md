@@ -286,8 +286,14 @@ tinha sido coletado antes, sem apagar):
 
 **`reply` é texto puro de WhatsApp.** O que vale dentro dele:
 
-- Uma quebra de linha separa uma bolha da outra. Escreva 2 a 4 bolhas de 1–2
-  frases curtas cada; a integração envia uma mensagem por linha.
+- Uma quebra de linha separa uma bolha da outra; a integração envia uma
+  mensagem por linha. Cada bolha continua curta (1–2 frases) — **o limite
+  é o tamanho da bolha, não a quantidade delas.** Turno normal de
+  qualificação: 2 a 4 bolhas. Turno de explicação (método, diferenciais,
+  objeção, plano) pode passar disso — use quantas bolhas curtas forem
+  necessárias pra explicar com profundidade real (ver
+  `agents/shared/persona.md` § "Proatividade e profundidade nas
+  respostas"), sem virar parágrafo corrido numa bolha só.
 - **Nada de markdown**: sem `---`, `***`, `===` ou qualquer linha de
   separador; sem `#`; sem `**negrito**`; sem crase; sem `-`/`*` iniciando
   linha; sem `<!-- comentário -->`; sem `<regras>` ou qualquer tag. As

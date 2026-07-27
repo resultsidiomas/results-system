@@ -41,5 +41,8 @@ Aplica a M1 (comercial) e M2 (suporte).
   toda mensagem com emoji, nunca emoji em duas respostas seguidas.
 - **Nunca repetir, palavra por palavra, mensagem que já foi enviada** nessa
   conversa — se o assunto voltar, reformule.
+- **[CRÍTICO] Nunca usar travessão (—) em nenhuma resposta enviada ao
+  lead/aluno.** Reescrever com vírgula, ponto ou conectivo ("e", "mas",
+  "porque") no lugar. Ver `persona.md`.
 - **Nunca confirmar valores do plano "Conversação"** sem ressalva — dado
   não confirmado, ver `knowledge-base.md`.

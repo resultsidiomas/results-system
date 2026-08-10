@@ -38,8 +38,19 @@ function findBackendRoot(startDir: string): string {
 
 const AGENTS_DIR = resolve(findBackendRoot(__dirname), 'agents');
 
+export interface PromptSection {
+  /** Caminho relativo dentro de `agents/`, ex.: `shared/persona.md`. */
+  key: string;
+  content: string;
+}
+
+/** Lê o `.md` versionado em git. Semente do banco e fallback se o Supabase cair. */
+export function readBlockFromDisk(key: string): string {
+  return readFileSync(resolve(AGENTS_DIR, key), 'utf-8').trim();
+}
+
 /**
- * Monta o system prompt juntando os arquivos de regra de `agents/`.
+ * Monta o system prompt juntando os blocos de regra.
  *
  * Por que concatenar em vez de referenciar: os prompts diziam "ver
  * `agents/shared/persona.md`" — ponteiro que o modelo não consegue abrir. Só
@@ -62,13 +73,15 @@ const AGENTS_DIR = resolve(findBackendRoot(__dirname), 'agents');
  * resposta — o lead recebia uma bolha com `---` sozinho. Tag nomeada delimita
  * igual sem ensinar markdown ao modelo.
  */
-export function composeSystemPrompt(sources: readonly string[]): string {
-  return sources
-    .map((source) => {
-      const content = readFileSync(resolve(AGENTS_DIR, source), 'utf-8').trim();
-      return `<regras fonte="agents/${source}">\n${content}\n</regras>`;
-    })
+export function composeSystemPrompt(sections: readonly PromptSection[]): string {
+  return sections
+    .map((section) => `<regras fonte="agents/${section.key}">\n${section.content.trim()}\n</regras>`)
     .join('\n\n');
+}
+
+/** Composição lendo direto do disco — usada como fallback e pelos testes. */
+export function composeSystemPromptFromDisk(keys: readonly string[]): string {
+  return composeSystemPrompt(keys.map((key) => ({ key, content: readBlockFromDisk(key) })));
 }
 
 /** Anexa o bloco de contexto recuperado da base de conhecimento, se houver. */

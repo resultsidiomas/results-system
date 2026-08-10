@@ -139,14 +139,23 @@ const aceitouCru = decideHandoff(0, { ...empty, accepted_consultant: true }, fal
 check('aceitou sem qualificar avisa a Gi', aceitouCru.handoff, true);
 check('aceitou sem qualificar NÃO pausa a IA', aceitouCru.pauseAi, false);
 
-// wants_to_schedule saiu da aceitação (decisão do usuário, 2026-07-25): o modelo
-// marca esse campo com sinal implícito ("de manhã seria melhor pra mim"), então
-// avisa a Gi (só ela confirma horário) mas não cala a IA.
+// Aceitar a experimental pausa a IA (decisão do usuário, 2026-08-10, revertendo
+// a de 2026-07-25): sem calendário integrado, a IA conduzindo o agendamento
+// sozinha acabava oferecendo horário inexistente. Quem marca aula é pessoa.
 const wantsSchedule = decideHandoff(0, { ...qualificado, wants_to_schedule: true }, false);
 check('quer agendar avisa a Gi', wantsSchedule.handoff, true);
-check('quer agendar NÃO pausa a IA (nem qualificado)', wantsSchedule.pauseAi, false);
-check('motivo do agendamento', wantsSchedule.reason, 'Lead quer agendar aula experimental!');
-check('alerta de agendamento tem freio próprio', wantsSchedule.alertKind, 'wants_schedule');
+check('quer agendar PAUSA a IA', wantsSchedule.pauseAi, true);
+check(
+  'motivo do agendamento',
+  wantsSchedule.reason,
+  'Lead aceitou a aula experimental — precisa de agendamento humano!',
+);
+check('pausa dispensa freio de repetição', wantsSchedule.alertKind, null);
+
+// Pausa vale mesmo sem qualificação fechada: quem assume é humano, então não há
+// risco de entregar lead cru pra IA continuar sozinha.
+const wantsScheduleCru = decideHandoff(0, { ...empty, wants_to_schedule: true }, false);
+check('quer agendar sem qualificar também pausa', wantsScheduleCru.pauseAi, true);
 
 check(
   'aceitação explícita ignora wants_to_schedule',

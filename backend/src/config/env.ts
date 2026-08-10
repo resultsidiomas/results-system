@@ -66,6 +66,16 @@ const envSchema = z.object({
   // Console de teste do agente (frontend interno, sem WhatsApp real)
   TEST_CONSOLE_TOKEN: z.string().min(1),
 
+  // Webhook do fluxo n8n em modo de teste: mesma entrada da UAZAPI, mas o
+  // fluxo desvia do node de envio e devolve a resposta ao chamador. Sem isso o
+  // console de teste roda a engine direto no backend (sem a camada n8n) e
+  // avisa qual caminho respondeu.
+  N8N_TEST_WEBHOOK_URL: z.string().url().optional(),
+  N8N_TEST_SECRET: z.string().optional(),
+  // O fluxo tem espera de debounce (`AGENT_MESSAGE_WAIT_MS` equivalente no
+  // n8n), então o timeout precisa ser maior que ela.
+  N8N_TEST_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+
   // Endpoint /api/v1/n8n-agent/run — token que o n8n manda no header x-internal-key
   INTERNAL_API_KEY: z.string().min(1),
 

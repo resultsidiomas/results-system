@@ -92,11 +92,8 @@ export function isQualifiedLead(data: CommercialCollectedData): boolean {
  * convite (`accepted_consultant`) ou pediu atendimento humano por conta própria
  * (`needs_human`).
  *
- * `wants_to_schedule` **não** entra aqui, por decisão do usuário (2026-07-25):
- * o modelo marca esse campo com sinal implícito — na simulação bastou o lead
- * responder "de manhã seria melhor pra mim" pra virar `true` —, e sinal
- * implícito não é aceitação. Topar a experimental continua avisando a Gi (só
- * ela confirma horário real), mas sem calar a IA.
+ * `wants_to_schedule` é tratado à parte (ver `decideHandoff`): também pausa,
+ * mas por outro motivo — quem marca aula é pessoa, não a IA.
  */
 export function acceptedConsultant(data: CommercialCollectedData): boolean {
   return data.accepted_consultant === true || data.needs_human === true;
@@ -111,12 +108,26 @@ export function acceptedConsultant(data: CommercialCollectedData): boolean {
  * falar com um consultor — regra definida pelo usuário em 2026-07-25. Aí sim a
  * conversa é da pessoa, não da IA.
  *
+ * **Aceitar a aula experimental também pausa** (`wants_to_schedule`), por
+ * decisão do usuário em 2026-08-10, revertendo a regra de 2026-07-25. O motivo
+ * é o erro observado na revisão de conversa real: a IA seguia conduzindo o
+ * agendamento sozinha e acabava oferecendo dia e hora que não existem, porque
+ * não há integração de calendário. Quem confirma horário é pessoa. Então, no
+ * momento em que o lead topa a experimental, a IA avisa que vai encaminhar,
+ * sai da conversa e o contato vai pro mesmo destino do lead qualificado
+ * (`GI_ALERT_NUMBER`, ver `agent.handoff.ts`).
+ *
+ * O risco conhecido dessa regra é marcar `wants_to_schedule` por sinal
+ * implícito — na simulação de julho bastou o lead dizer "de manhã seria melhor
+ * pra mim" pra virar `true`, e aí a IA emudeceria no meio da qualificação. A
+ * contenção está no prompt (`commercial/prompt-v1.md` passo 5 e a definição do
+ * campo em `collected_data`), que agora exige aceitação explícita e proíbe
+ * marcar o campo por preferência de turno. Se voltar a acontecer, o ajuste é
+ * no texto do campo, não aqui.
+ *
  * Todo o resto avisa a Gi e a IA **continua respondendo**:
  * - aceitou consultor mas ainda não está qualificado: a IA segue conversando e
  *   completando idioma/objetivo em vez de entregar lead cru pra equipe.
- * - `wants_to_schedule`: a Gi é avisada (só ela confirma horário real), mas o
- *   campo é marcado com sinal implícito ("de manhã seria melhor pra mim"), e
- *   sinal implícito não cala a IA.
  * - score ≥ 9: inferência de temperatura, não pedido do lead. Pausar aqui
  *   emudecia a IA no meio da qualificação.
  * - falha técnica: o fallback promete resposta humana (então avisa), mas o
@@ -154,9 +165,12 @@ export function decideHandoff(
   if (data.wants_to_schedule === true) {
     return {
       handoff: true,
-      pauseAi: false,
-      reason: 'Lead quer agendar aula experimental!',
-      alertKind: 'wants_schedule',
+      pauseAi: true,
+      reason: 'Lead aceitou a aula experimental — precisa de agendamento humano!',
+      // Pausa é o próprio freio de repetição: o contato sai da IA, então não
+      // existe turno seguinte pra re-alertar (mesma lógica de
+      // `accepted_consultant` qualificado).
+      alertKind: null,
     };
   }
 

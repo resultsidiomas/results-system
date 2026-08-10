@@ -6,29 +6,14 @@ import { getChatHistory, appendChatMessage } from '../shared/agent.memory.redis.
 import { getOrCreateConversation, appendConversationTurn } from '../shared/agent.memory.pg.js';
 import { buildMessages, lastAssistantReply } from '../shared/agent.context.js';
 import { completeStructuredTurn } from '../shared/agent.completion.js';
-import { composeSystemPrompt, withKnowledgeContext } from '../shared/agent.prompt.js';
+import { withKnowledgeContext } from '../shared/agent.prompt.js';
+import { loadSystemPrompt } from '../shared/agent.prompt.repository.js';
+import { emojiBudget } from '../shared/agent.emoji-budget.js';
 import { supportTurnSchema, supportResponseJsonSchema } from './support.schema.js';
 import type { EscalationReason } from './support.schema.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
 import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
 import { notifyGi, claimHandoffAlert } from '../shared/agent.handoff.js';
-
-/**
- * Regra de comportamento vai toda no system prompt — nunca como referência a
- * arquivo, que o modelo não consegue abrir (ver `agent.prompt.ts`).
- */
-const SYSTEM_PROMPT = composeSystemPrompt([
-  'support/prompt-v1.md',
-  'shared/persona.md',
-  'shared/forbidden-phrases.md',
-  'shared/school-info.md',
-  'support/rescheduling-rules.md',
-  'support/retention-flow.md',
-  // FAQ vai no prompt, não na busca: é pequeno, é o assunto mais frequente do
-  // suporte, e quando a recuperação falhava o agente inventava um fluxo de
-  // "Esqueci minha senha" que não existe em vez de mandar o link real.
-  'support/faq.md',
-]);
 
 const KNOWLEDGE_GUARDRAIL = 'use pra responder com precisão, nunca invente política fora disso';
 
@@ -57,7 +42,10 @@ export async function runSupportTurn(
 ): Promise<SupportTurnResult> {
   const history = await getChatHistory(instance, remoteJid);
   const knowledgeContext = await retrieveKnowledgeContext(message, 'support');
-  const systemPrompt = withKnowledgeContext(SYSTEM_PROMPT, knowledgeContext, KNOWLEDGE_GUARDRAIL);
+  // Prompt vem do banco, com os `.md` do git como fallback — ver
+  // `agent.prompt.repository.ts`.
+  const basePrompt = await loadSystemPrompt('support');
+  const systemPrompt = withKnowledgeContext(basePrompt, knowledgeContext, KNOWLEDGE_GUARDRAIL);
   const messages = buildMessages(systemPrompt, history, message);
   const conversation = await getOrCreateConversation(contact.id, 'support');
 
@@ -77,9 +65,12 @@ export async function runSupportTurn(
       lastAssistantReply: lastAssistantReply(history),
     });
 
-    reply = sanitizeOutgoingText(turn.reply);
     handoff = turn.needs_human;
     escalationReason = turn.escalation_reason;
+
+    // Escalação encerra o atendimento da IA, então é a última mensagem dela —
+    // único momento (junto com a primeira) em que emoji é permitido.
+    reply = sanitizeOutgoingText(turn.reply, emojiBudget({ history, isClosingTurn: handoff }));
 
     await appendConversationTurn(conversation, message, reply, conversation.lead_score, {
       last_escalation_reason: escalationReason,

@@ -5,7 +5,9 @@ import type { AgentTurnResult } from '../shared/agent.types.js';
 import { getChatHistory, appendChatMessage } from '../shared/agent.memory.redis.js';
 import { getOrCreateConversation, appendConversationTurn } from '../shared/agent.memory.pg.js';
 import { buildMessages, lastAssistantReply } from '../shared/agent.context.js';
-import { composeSystemPrompt, withKnowledgeContext } from '../shared/agent.prompt.js';
+import { withKnowledgeContext } from '../shared/agent.prompt.js';
+import { loadSystemPrompt } from '../shared/agent.prompt.repository.js';
+import { emojiBudget } from '../shared/agent.emoji-budget.js';
 import { completeStructuredTurn } from '../shared/agent.completion.js';
 import { commercialTurnSchema, commercialResponseJsonSchema } from './commercial.schema.js';
 import { EMPTY_COLLECTED_DATA, mergeCollectedData } from './commercial.schema.js';
@@ -14,19 +16,6 @@ import { scoreLead, decideHandoff, canSendPriceTable } from './commercial.scorin
 import { notifyGi, claimHandoffAlert } from '../shared/agent.handoff.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
 import { sanitizeOutgoingText } from '../../shared/text-sanitizer.js';
-
-/**
- * Regra de comportamento vai toda no system prompt — nunca como referência a
- * arquivo, que o modelo não consegue abrir (ver `agent.prompt.ts`).
- */
-const SYSTEM_PROMPT = composeSystemPrompt([
-  'commercial/prompt-v1.md',
-  'shared/persona.md',
-  'shared/forbidden-phrases.md',
-  'shared/school-info.md',
-  'commercial/objections.md',
-  'commercial/handoff-rules.md',
-]);
 
 const KNOWLEDGE_GUARDRAIL =
   'use pra responder com precisão, nunca invente preço/curso/política fora disso';
@@ -48,7 +37,12 @@ export async function runCommercialTurn(
 ): Promise<AgentTurnResult> {
   const history = await getChatHistory(instance, remoteJid);
   const knowledgeContext = await retrieveKnowledgeContext(message, 'commercial');
-  const systemPrompt = withKnowledgeContext(SYSTEM_PROMPT, knowledgeContext, KNOWLEDGE_GUARDRAIL);
+  // Prompt vem do banco (`agent_prompt_blocks`), com os `.md` do git como
+  // fallback — ver `agent.prompt.repository.ts`. Antes era um const de módulo
+  // lido no import; agora é por turno, com cache curto, pra edição feita no
+  // painel valer sem redeploy.
+  const basePrompt = await loadSystemPrompt('commercial');
+  const systemPrompt = withKnowledgeContext(basePrompt, knowledgeContext, KNOWLEDGE_GUARDRAIL);
   const messages = buildMessages(systemPrompt, history, message);
   const conversation = await getOrCreateConversation(contact.id, 'commercial');
 
@@ -76,7 +70,13 @@ export async function runCommercialTurn(
     // fazia o score cair e o handoff virar sorteio.
     collectedData = mergeCollectedData(conversation.collected_data, turn.collected_data);
     leadScore = scoreLead(collectedData, messageCount);
-    reply = sanitizeOutgoingText(turn.reply);
+
+    // Orçamento de emoji depende de a conversa estar começando ou terminando,
+    // então precisa da decisão de handoff antes de sanitizar. `decideHandoff` é
+    // pura, então chamar duas vezes (aqui e depois do try/catch, onde o caminho
+    // de falha também precisa dela) não custa nada e evita duplicar a regra.
+    const closingTurn = decideHandoff(leadScore, collectedData, false).pauseAi;
+    reply = sanitizeOutgoingText(turn.reply, emojiBudget({ history, isClosingTurn: closingTurn }));
     priceTableVariant = turn.price_table_variant;
 
     sendPriceTable = canSendPriceTable(turn.send_price_table, collectedData);

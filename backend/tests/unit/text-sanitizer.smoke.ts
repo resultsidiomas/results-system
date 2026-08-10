@@ -55,5 +55,34 @@ check(
 
 check('linhas em branco extras colapsadas', sanitizeOutgoingText('a\n\n\n\nb'), 'a\n\nb');
 
+// Travessão: a regra existia só no prompt e o modelo continuou usando, porque
+// os próprios exemplos do prompt eram escritos com travessão.
+check(
+  'travessão no meio da frase vira vírgula',
+  sanitizeOutgoingText('Perfeito, particular então — vou te mandar a tabela'),
+  'Perfeito, particular então, vou te mandar a tabela',
+);
+check(
+  'meia-risca também é convertida',
+  sanitizeOutgoingText('aulas online – com professor nativo'),
+  'aulas online, com professor nativo',
+);
+check(
+  'travessão iniciando linha sai inteiro',
+  sanitizeOutgoingText('O método tem:\n— conversação\n— correção na hora'),
+  'O método tem:\nconversação\ncorreção na hora',
+);
+check(
+  'travessão colado em pontuação não duplica vírgula',
+  sanitizeOutgoingText('É isso —, combinado'),
+  'É isso, combinado',
+);
+check(
+  'travessão no fim da linha não deixa vírgula órfã',
+  sanitizeOutgoingText('Perfeito —\nvou confirmar'),
+  'Perfeito\nvou confirmar',
+);
+check('hífen normal é preservado', sanitizeOutgoingText('aula bem-vinda'), 'aula bem-vinda');
+
 console.log(failures === 0 ? 'ALL PASS' : `${failures} FAIL`);
 process.exit(failures === 0 ? 0 : 1);

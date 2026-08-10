@@ -1,0 +1,24 @@
+# Quebra de linha normalizada para LF no repositório.
+#
+# Sem isso, uma cópia do projeto feita em máquina Windows converte o working
+# tree inteiro para CRLF e o `git status` passa a mostrar ~134 arquivos
+# "modificados" que não têm nenhuma mudança de conteúdo — foi o que aconteceu
+# em 2026-08. Todo commit ficava impossível de revisar.
+#
+# `text=auto eol=lf`: git guarda LF no repositório e entrega LF no checkout,
+# em qualquer sistema. Editores modernos (VS Code, JetBrains) lidam com LF no
+# Windows sem problema.
+* text=auto eol=lf
+
+# Binários: nunca normalizar, senão o arquivo corrompe.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+*.ico  binary
+*.woff binary
+*.woff2 binary

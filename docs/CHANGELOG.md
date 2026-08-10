@@ -9,6 +9,77 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-08-10] - M1+M2+M4: prompt centralizado no banco, 3 correções de comportamento e painel humano
+
+O que:
+1. **Prompt centralizado (ADR-015).** A instrução vivia em 13 arquivos `.md` em
+   `backend/agents/` e a **ordem de montagem estava hardcoded** dentro de
+   `commercial.service.ts` e `support.service.ts` — não havia um lugar para o
+   humano olhar e editar. Agora `agent_prompt_blocks` (conteúdo) +
+   `agent_prompt_composition` (ordem) no Supabase são a fonte de verdade, com
+   `agent_prompt_versions` gravado por trigger (histórico e rollback). Cache de
+   30s por agente e **fallback nos `.md` do git**: se o Supabase cair ou um
+   bloco faltar, o agente responde com a versão commitada em vez de perder a
+   regra. `agent.prompt.manifest.ts` descreve o que cada bloco controla;
+   `npm run seed:prompts` semeia sem sobrescrever edição humana (`--force`
+   desfaz).
+2. **Emoji só na primeira e na última mensagem.** `AGENT_MAX_EMOJIS` limitava
+   **por resposta**, o que permite um emoji em toda mensagem — era exatamente
+   o efeito observado na revisão de conversa real (doc "Conversa Edu 2",
+   06/08). `emojiBudget()` passa a decidir por posição na conversa: primeira
+   resposta do agente e turno que encerra o atendimento (`pauseAi`) levam 1;
+   todo o resto, 0. "Última mensagem" não é verificável pelo modelo, então o
+   sinal usado é o momento em que a IA sai de cena.
+3. **Travessão cortado de verdade.** A proibição já existia em `persona.md` e
+   `forbidden-phrases.md`, mas os **exemplos de fala do próprio
+   `commercial/prompt-v1.md` usavam travessão** ("Perfeito, particular então —
+   vou te mandar a tabela"): o prompt ensinava por imitação o que proibia por
+   instrução. Exemplos reescritos + `stripEmDash()` no sanitizer (travessão do
+   meio vira vírgula, de início de linha sai inteiro).
+4. **Aceitar a experimental pausa a IA.** `decideHandoff` devolvia
+   `pauseAi: false` para `wants_to_schedule`, então a IA seguia conduzindo o
+   agendamento e oferecia dia/hora inexistentes — não há calendário integrado.
+   Agora pausa e encaminha pro mesmo destino do lead qualificado. **Reverte a
+   decisão de 2026-07-25**; o risco que motivou aquela decisão (modelo marcando
+   o campo por sinal implícito) foi contido no texto do passo 5 e da definição
+   do campo, que agora exigem aceitação explícita e listam o que não conta.
+5. **Painel interno (`frontend/`).** React + Vite + Supabase Auth, sem cadastro
+   aberto. Leitura e edição do prompt agrupado por categoria (comportamento,
+   regras, comercial, suporte, conhecimento), com histórico, rollback e prévia
+   do prompt montado. Área de testes que roda a conversa de verdade: com
+   `N8N_TEST_WEBHOOK_URL` a mensagem entra pelo fluxo real do n8n e só o envio
+   pela UAZAPI é desviado; sem ela, engine direto no backend. O painel sempre
+   mostra qual caminho respondeu.
+6. **`.gitattributes` normalizando EOL.** Uma cópia do projeto feita em máquina
+   Windows converteu o working tree para CRLF: 134 arquivos apareciam
+   "modificados" com 22.417 inserções e 22.417 remoções e zero mudança de
+   conteúdo, inviabilizando review.
+
+Por que: revisão de conversa real mostrou o agente ainda errando em emoji,
+travessão e agendamento, apesar de os três já estarem proibidos por escrito —
+sinal de que instrução sozinha não segura comportamento. E a equipe precisava
+conseguir ajustar a regra sem depender de deploy.
+
+Arquivos: `database/migrations/20260810000001_agent_prompts.sql`,
+`backend/src/agents/shared/agent.prompt.manifest.ts`,
+`agent.prompt.repository.ts`, `agent.prompt.ts`, `agent.emoji-budget.ts`,
+`backend/src/shared/text-sanitizer.ts`,
+`backend/src/agents/commercial/commercial.scoring.ts`, `commercial.service.ts`,
+`backend/src/agents/support/support.service.ts`, `backend/src/admin/*`,
+`backend/src/testing/n8n-test-flow.ts`, `backend/scripts/seed-prompts.ts`,
+`backend/agents/{commercial,support,shared}/*.md`, `backend/src/config/env.ts`,
+`frontend/*`, `docs/decisions/ADR-015-*.md`, `docs/CONSOLE-TESTE-N8N.md`,
+`.gitattributes`.
+
+Impacto: o prompt em produção passa a vir do banco (migration + seed são
+obrigatórios antes do deploy, senão o agente roda no fallback do git). Mais
+conversas passam a pausar a IA, e **não existe rotina de resume** — o contato
+volta sozinho depois de `AGENT_PAUSE_MAX_HOURS` (24h), mesma limitação do
+ADR-014, agora atingindo mais casos. O desvio de teste no fluxo n8n ainda **não
+foi aplicado**: a chave da API do n8n expirou em 30/07/2026.
+
+Responsável: Claude Code
+
 ## [2026-07-25] - M1+M2: agente parava de responder, emoji em excesso e `---` na mensagem
 
 O que:

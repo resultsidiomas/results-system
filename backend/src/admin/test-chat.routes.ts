@@ -28,6 +28,7 @@ import {
   findSave,
   deleteSave,
 } from './test-console.repository.js';
+import { listRealConversations, findRealConversation } from './real-conversations.repository.js';
 
 const TEST_INSTANCE = 'test-console';
 
@@ -323,6 +324,102 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
 
     const saved = await createSave(sessionId, parsed.data.title.trim(), state, user.email);
     logger.info('test conversation saved', { sessionId, saveId: saved.id, by: user.email });
+
+    return reply.send(saved);
+  });
+}
+
+/**
+ * Conversas reais do WhatsApp, só leitura.
+ *
+ * Reaproveita `mergeConversations` e a tabela de observações: pra equipe, rever
+ * um atendimento real e um teste é a mesma tarefa, e o que muda é a origem —
+ * marcada em `source` pra tela nunca deixar dúvida sobre o que está na frente.
+ * A chave da observação é o `contact_id`, que é UUID e não colide com nome de
+ * sessão de teste.
+ */
+export async function adminRealConversationRoutes(app: FastifyInstance) {
+  function parseContactId(request: FastifyRequest): string {
+    const parsed = z.string().uuid().safeParse((request.params as { contactId?: string }).contactId);
+    if (!parsed.success) throw new BadRequestError('id de contato inválido');
+    return parsed.data;
+  }
+
+  /** Mesmo formato de `buildSessionState`, pra tela renderizar teste e real igual. */
+  async function buildRealState(contactId: string) {
+    const detail = await findRealConversation(contactId);
+    if (!detail) throw new NotFoundError('conversa não encontrada');
+
+    const notes = await listNotes(contactId);
+    const noteByIndex = new Map(notes.map((note) => [note.message_index, note.note]));
+
+    return {
+      source: 'real' as const,
+      contact: detail.contact,
+      viaN8n: false,
+      messages: mergeConversations(detail.conversations).map((message) => ({
+        ...message,
+        note: noteByIndex.get(message.index) ?? null,
+      })),
+      leadScore: detail.leadScore,
+      collectedData: detail.collectedData,
+      conversationPhase: detail.conversationPhase,
+      pausarIa: detail.contact.pausarIa,
+    };
+  }
+
+  app.get('/api/v1/admin/conversations', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireAdmin(request);
+    return reply.send({ conversations: await listRealConversations() });
+  });
+
+  app.get('/api/v1/admin/conversations/:contactId', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireAdmin(request);
+    return reply.send(await buildRealState(parseContactId(request)));
+  });
+
+  app.put(
+    '/api/v1/admin/conversations/:contactId/notes/:messageIndex',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = await requireAdmin(request);
+      const contactId = parseContactId(request);
+      const messageIndex = parseMessageIndex(request);
+
+      const parsed = noteBodySchema.safeParse(request.body);
+      if (!parsed.success) throw new BadRequestError('observação vazia ou longa demais');
+
+      return reply.send(await upsertNote(contactId, messageIndex, parsed.data.note.trim(), user.email));
+    },
+  );
+
+  app.delete(
+    '/api/v1/admin/conversations/:contactId/notes/:messageIndex',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      await requireAdmin(request);
+      await deleteNote(parseContactId(request), parseMessageIndex(request));
+      return reply.send({ status: 'deleted' });
+    },
+  );
+
+  /**
+   * Guarda o atendimento real junto das conversas salvas de teste.
+   *
+   * `source: 'real'` viaja dentro do payload e é o que a lista usa pra etiquetar
+   * — sem isso um atendimento de lead e uma simulação ficariam indistinguíveis
+   * na mesma lista, que é o pior resultado possível pra quem revisa.
+   */
+  app.post('/api/v1/admin/conversations/:contactId/save', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await requireAdmin(request);
+    const contactId = parseContactId(request);
+
+    const parsed = saveBodySchema.safeParse(request.body);
+    if (!parsed.success) throw new BadRequestError('título obrigatório (até 120 caracteres)');
+
+    const state = await buildRealState(contactId);
+    if (state.messages.length === 0) throw new BadRequestError('conversa vazia, nada a salvar');
+
+    const saved = await createSave(contactId, parsed.data.title.trim(), state, user.email);
+    logger.info('real conversation saved', { saveId: saved.id, by: user.email });
 
     return reply.send(saved);
   });

@@ -1,4 +1,5 @@
 import { supabase } from '../../config/supabase.js';
+import { logger } from '../../shared/logger.js';
 import type { ChatMessage } from './agent.types.js';
 
 export interface Conversation {
@@ -70,17 +71,35 @@ export async function appendConversationTurn(
     { role: 'assistant', content: assistantMessage, at: now },
   ];
 
-  const { error } = await supabase
+  const core = {
+    messages,
+    lead_score: leadScore,
+    collected_data: { ...conversation.collected_data, ...collectedData },
+  };
+
+  // `undefined` mantém o valor anterior: o suporte não declara fase e não deve
+  // zerar a que o comercial gravou na mesma conversa.
+  const withPhase =
+    conversationPhase === undefined ? core : { ...core, conversation_phase: conversationPhase };
+
+  const { error } = await supabase.from('conversations').update(withPhase).eq('id', conversation.id);
+  if (!error) return;
+
+  // A fase é diagnóstico do painel; a mensagem é o atendimento. Se a coluna não
+  // existir (migration não aplicada no ambiente), regrava sem ela em vez de
+  // deixar o turno inteiro falhar — quem chama trata exceção daqui virando
+  // resposta de fallback ("tive um problema técnico") pro lead, a cada turno.
+  if (withPhase === core) throw error;
+
+  logger.error('conversation update with conversation_phase failed, retrying without it', {
+    conversationId: conversation.id,
+    errorMessage: error.message,
+  });
+
+  const { error: retryError } = await supabase
     .from('conversations')
-    .update({
-      messages,
-      lead_score: leadScore,
-      collected_data: { ...conversation.collected_data, ...collectedData },
-      // `undefined` mantém o valor anterior: o suporte não declara fase e não
-      // deve zerar a que o comercial gravou na mesma conversa.
-      ...(conversationPhase === undefined ? {} : { conversation_phase: conversationPhase }),
-    })
+    .update(core)
     .eq('id', conversation.id);
 
-  if (error) throw error;
+  if (retryError) throw retryError;
 }

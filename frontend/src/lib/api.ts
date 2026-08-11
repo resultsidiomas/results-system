@@ -68,6 +68,23 @@ export interface SessionState {
   conversationPhase: ConversationPhase | null;
 }
 
+export interface RealConversationSummary {
+  contactId: string;
+  name: string | null;
+  phoneMasked: string;
+  agentTypes: AgentType[];
+  leadScore: number;
+  conversationPhase: ConversationPhase | null;
+  messageCount: number;
+  pausarIa: string;
+  updatedAt: string;
+}
+
+export interface RealConversationDetail extends SessionState {
+  source: 'real';
+  contact: { id: string; name: string | null; phoneMasked: string; pausarIa: string };
+}
+
 export interface SavedConversationSummary {
   id: string;
   session_id: string;
@@ -76,6 +93,7 @@ export interface SavedConversationSummary {
   created_at: string;
   message_count: number;
   note_count: number;
+  source: 'teste' | 'real';
 }
 
 export interface SavedConversation extends SavedConversationSummary {
@@ -185,4 +203,29 @@ export const api = {
 
   deleteSavedConversation: (id: string) =>
     request<{ status: string }>(`/api/v1/admin/test-saves/${id}`, { method: 'DELETE' }),
+
+  // ---------- conversas reais (WhatsApp) ----------
+
+  listRealConversations: () =>
+    request<{ conversations: RealConversationSummary[] }>('/api/v1/admin/conversations'),
+
+  realConversation: (contactId: string) =>
+    request<RealConversationDetail>(`/api/v1/admin/conversations/${contactId}`),
+
+  saveRealNote: (contactId: string, messageIndex: number, note: string) =>
+    request<{ message_index: number; note: string }>(
+      `/api/v1/admin/conversations/${contactId}/notes/${messageIndex}`,
+      { method: 'PUT', body: JSON.stringify({ note }) },
+    ),
+
+  deleteRealNote: (contactId: string, messageIndex: number) =>
+    request<{ status: string }>(`/api/v1/admin/conversations/${contactId}/notes/${messageIndex}`, {
+      method: 'DELETE',
+    }),
+
+  saveRealConversation: (contactId: string, title: string) =>
+    request<SavedConversationSummary>(`/api/v1/admin/conversations/${contactId}/save`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
 };

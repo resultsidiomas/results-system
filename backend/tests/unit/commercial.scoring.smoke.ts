@@ -7,6 +7,7 @@ import {
   canSendPriceTable,
   HANDOFF_SCORE_THRESHOLD,
 } from '../../src/agents/commercial/commercial.scoring.js';
+import { env } from '../../src/config/env.js';
 import {
   EMPTY_COLLECTED_DATA,
   mergeCollectedData,
@@ -139,23 +140,35 @@ const aceitouCru = decideHandoff(0, { ...empty, accepted_consultant: true }, fal
 check('aceitou sem qualificar avisa a Gi', aceitouCru.handoff, true);
 check('aceitou sem qualificar NÃO pausa a IA', aceitouCru.pauseAi, false);
 
-// Aceitar a experimental pausa a IA (decisão do usuário, 2026-08-10, revertendo
-// a de 2026-07-25): sem calendário integrado, a IA conduzindo o agendamento
-// sozinha acabava oferecendo horário inexistente. Quem marca aula é pessoa.
+// Aceitar a experimental avisa a Gi sempre. **Pausar** a IA é opcional
+// (`AGENT_PAUSE_ON_SCHEDULE_ACCEPT`, ADR-015): sem calendário integrado, a IA
+// conduzindo o agendamento sozinha acaba oferecendo horário inexistente, mas
+// ligar a pausa deixa o lead esperando se ninguém acompanhar os handoffs. O
+// default reproduz o comportamento anterior pra atualizar o backend não mudar
+// o fluxo de atendimento sozinho.
 const wantsSchedule = decideHandoff(0, { ...qualificado, wants_to_schedule: true }, false);
 check('quer agendar avisa a Gi', wantsSchedule.handoff, true);
-check('quer agendar PAUSA a IA', wantsSchedule.pauseAi, true);
 check(
   'motivo do agendamento',
   wantsSchedule.reason,
   'Lead aceitou a aula experimental — precisa de agendamento humano!',
 );
-check('pausa dispensa freio de repetição', wantsSchedule.alertKind, null);
 
-// Pausa vale mesmo sem qualificação fechada: quem assume é humano, então não há
-// risco de entregar lead cru pra IA continuar sozinha.
+check('flag desligada: IA continua respondendo', wantsSchedule.pauseAi, false);
+// Sem pausa, `wants_to_schedule` fica `true` pro resto da conversa (latching
+// flag) e re-alertaria a cada turno — o freio precisa existir.
+check('flag desligada exige freio de repetição', wantsSchedule.alertKind, 'wants_schedule');
+
+env.AGENT_PAUSE_ON_SCHEDULE_ACCEPT = true;
+const wantsScheduleComPausa = decideHandoff(0, { ...qualificado, wants_to_schedule: true }, false);
+check('flag ligada: PAUSA a IA', wantsScheduleComPausa.pauseAi, true);
+check('pausa dispensa freio de repetição', wantsScheduleComPausa.alertKind, null);
+
+// Vale mesmo sem qualificação fechada: quem assume é humano, então não há risco
+// de entregar lead cru pra IA continuar sozinha.
 const wantsScheduleCru = decideHandoff(0, { ...empty, wants_to_schedule: true }, false);
 check('quer agendar sem qualificar também pausa', wantsScheduleCru.pauseAi, true);
+env.AGENT_PAUSE_ON_SCHEDULE_ACCEPT = false;
 
 check(
   'aceitação explícita ignora wants_to_schedule',

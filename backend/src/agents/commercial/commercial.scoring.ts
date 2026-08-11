@@ -1,5 +1,6 @@
 import type { CommercialCollectedData } from './commercial.schema.js';
 import type { HandoffAlertKind } from '../shared/agent.handoff.js';
+import { env } from '../../config/env.js';
 
 /**
  * Antes era 7, e isso emudecia a IA no meio da qualificação: idioma(2) +
@@ -163,14 +164,18 @@ export function decideHandoff(
   }
 
   if (data.wants_to_schedule === true) {
+    // Ligado por `AGENT_PAUSE_ON_SCHEDULE_ACCEPT`, default desligado. Com a
+    // pausa, o contato sai da IA e a própria pausa é o freio de repetição do
+    // alerta; sem ela, a conversa continua e o alerta precisa de trava pra não
+    // repetir a cada turno (`wants_to_schedule` fica `true` pro resto da
+    // conversa por ser latching flag).
+    const pauses = env.AGENT_PAUSE_ON_SCHEDULE_ACCEPT;
+
     return {
       handoff: true,
-      pauseAi: true,
+      pauseAi: pauses,
       reason: 'Lead aceitou a aula experimental — precisa de agendamento humano!',
-      // Pausa é o próprio freio de repetição: o contato sai da IA, então não
-      // existe turno seguinte pra re-alertar (mesma lógica de
-      // `accepted_consultant` qualificado).
-      alertKind: null,
+      alertKind: pauses ? null : 'wants_schedule',
     };
   }
 

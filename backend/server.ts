@@ -6,7 +6,11 @@ import { uazapiWebhookRoute } from './src/whatsapp/uazapi/uazapi.webhook.js';
 import { testChatRoutes } from './src/testing/test-chat.routes.js';
 import { n8nAgentRoutes } from './src/integrations/n8n-agent/n8n-agent.routes.js';
 import { adminPromptRoutes } from './src/admin/prompt.routes.js';
-import { adminTestChatRoutes, adminTestSaveRoutes } from './src/admin/test-chat.routes.js';
+import {
+  adminTestChatRoutes,
+  adminTestSaveRoutes,
+  adminRealConversationRoutes,
+} from './src/admin/test-chat.routes.js';
 import { logger } from './src/shared/logger.js';
 
 const app = Fastify({ logger: false });
@@ -19,6 +23,7 @@ await app.register(n8nAgentRoutes);
 await app.register(adminPromptRoutes);
 await app.register(adminTestChatRoutes);
 await app.register(adminTestSaveRoutes);
+await app.register(adminRealConversationRoutes);
 
 app.get('/health', async () => ({ status: 'ok' }));
 

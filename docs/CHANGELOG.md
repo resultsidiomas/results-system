@@ -9,6 +9,44 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-08-10] - M4: troca de ramo neutra em produção e conversas reais no painel
+
+O que:
+1. **Gravação da fase não pode custar o turno.** `appendConversationTurn` grava
+   dentro do `try` do serviço: se `conversation_phase` não existisse (migration
+   não aplicada num ambiente), o `UPDATE` falharia, cairia no `catch` e **todo
+   lead receberia a resposta de fallback**. Agora, falhando com o campo, regrava
+   sem ele. A fase é diagnóstico do painel; a mensagem é o atendimento.
+2. **`AGENT_PAUSE_ON_SCHEDULE_ACCEPT`, default `false`.** A pausa ao aceitar a
+   experimental (ADR-015) é a única mudança do branch com efeito no fluxo de
+   atendimento. Com default desligado, atualizar o backend não muda o
+   comportamento sozinho — a Gi segue sendo avisada e a IA segue conversando,
+   como hoje. Sem pausa, `wants_to_schedule` é latching flag e re-alertaria a
+   cada turno, então o alerta volta a usar o freio `wants_schedule`.
+3. **Conversas reais no painel.** Aba própria, só leitura, listando os
+   atendimentos de verdade do WhatsApp (contatos `test-` ficam de fora). Mesma
+   linha do tempo mesclada dos dois agentes e as mesmas observações por
+   resposta. Telefone mascarado (`••••4821`): identifica o contato sem replicar
+   o número inteiro numa segunda tela. Snapshot carrega `source: 'real'`, que
+   etiqueta a conversa na lista — atendimento de lead e simulação
+   indistinguíveis na mesma lista seria o pior resultado pra quem revisa.
+4. `ConversationMessages` e `ConversationAnalysis` extraídos: teste e real
+   renderizam pelo mesmo código, então divergir é impossível.
+
+Arquivos: `backend/src/agents/shared/agent.memory.pg.ts`,
+`backend/src/agents/commercial/commercial.scoring.ts`, `backend/src/config/env.ts`,
+`backend/src/admin/real-conversations.repository.ts`,
+`backend/src/admin/test-chat.routes.ts`, `backend/src/admin/test-console.repository.ts`,
+`backend/server.ts`, `backend/tests/unit/commercial.scoring.smoke.ts`, `.env.example`,
+`frontend/src/pages/RealConversationsPage.tsx`, `frontend/src/components/ConversationMessages.tsx`,
+`frontend/src/components/ConversationAnalysis.tsx`, `frontend/src/pages/TestPage.tsx`,
+`frontend/src/App.tsx`, `frontend/src/lib/api.ts`, `frontend/src/styles.css`
+
+Impacto: nenhuma variável nova obrigatória e contrato do n8n intacto (webhook
+UAZAPI e `n8n-agent/` sem diff), então trocar o ramo do serviço de backend não
+exige mexer no fluxo. As mudanças de emoji e travessão do ADR-015 entram junto —
+são de prompt e sanitizer, cosméticas. Só a pausa fica atrás de flag.
+
 ## [2026-08-10] - M4: deploy do painel, fase da conversa e área de testes com registro
 
 O que:

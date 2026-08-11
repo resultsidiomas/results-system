@@ -15,6 +15,8 @@ export interface TestSaveSummary {
   created_at: string;
   message_count: number;
   note_count: number;
+  /** `real` = atendimento de lead pelo WhatsApp; `teste` = simulação do console. */
+  source: 'teste' | 'real';
 }
 
 export interface TestSave extends TestSaveSummary {
@@ -131,7 +133,7 @@ export async function deleteSave(id: string): Promise<void> {
  * `payload`. Contar aqui evita mandar a conversa inteira só pra montar a lista.
  */
 function toSummary(row: Record<string, unknown>): TestSaveSummary {
-  const payload = (row.payload ?? {}) as { messages?: unknown[] };
+  const payload = (row.payload ?? {}) as { messages?: unknown[]; source?: string };
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
 
   return {
@@ -142,5 +144,8 @@ function toSummary(row: Record<string, unknown>): TestSaveSummary {
     created_at: row.created_at as string,
     message_count: messages.length,
     note_count: messages.filter((message) => (message as { note?: unknown }).note).length,
+    // Snapshot antigo (gravado antes da aba de conversas reais existir) não tem
+    // o campo e só podia ser de teste.
+    source: payload.source === 'real' ? 'real' : 'teste',
   };
 }

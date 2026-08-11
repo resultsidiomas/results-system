@@ -4,8 +4,9 @@ import { supabase } from './lib/supabase';
 import Login from './components/Login';
 import PromptsPage from './pages/PromptsPage';
 import TestPage from './pages/TestPage';
+import RealConversationsPage from './pages/RealConversationsPage';
 
-type Tab = 'prompts' | 'teste';
+type Tab = 'prompts' | 'teste' | 'reais';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -40,6 +41,9 @@ export default function App() {
           <button className={tab === 'teste' ? 'tab active' : 'tab'} onClick={() => setTab('teste')}>
             Área de testes
           </button>
+          <button className={tab === 'reais' ? 'tab active' : 'tab'} onClick={() => setTab('reais')}>
+            Conversas reais
+          </button>
         </nav>
 
         <div className="user">
@@ -48,7 +52,11 @@ export default function App() {
         </div>
       </header>
 
-      <main>{tab === 'prompts' ? <PromptsPage /> : <TestPage />}</main>
+      <main>
+        {tab === 'prompts' && <PromptsPage />}
+        {tab === 'teste' && <TestPage />}
+        {tab === 'reais' && <RealConversationsPage />}
+      </main>
     </div>
   );
 }

@@ -25,6 +25,16 @@ const envSchema = z.object({
   // Prazo absoluto contado do momento da pausa; depois disso a IA reassume o
   // contato sozinha — não existe rotina de resume implementada (ver ADR-014).
   AGENT_PAUSE_MAX_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  // Aceitar a aula experimental pausa a IA e entrega pra uma pessoa (ADR-015).
+  // Default `false` = comportamento anterior (a IA segue conduzindo), pra
+  // atualizar o backend não mudar o fluxo de atendimento sozinho. Ligar só com
+  // alguém acompanhando os handoffs: se o modelo marcar `wants_to_schedule` por
+  // sinal implícito, a IA emudece no meio da qualificação e o lead fica
+  // esperando um humano que talvez não perceba.
+  AGENT_PAUSE_ON_SCHEDULE_ACCEPT: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 
   // Knowledge base / RAG (ADR-009)
   KNOWLEDGE_MATCH_COUNT: z.coerce.number().int().positive().default(4),

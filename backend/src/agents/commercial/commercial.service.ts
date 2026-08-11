@@ -11,7 +11,11 @@ import { emojiBudget } from '../shared/agent.emoji-budget.js';
 import { completeStructuredTurn } from '../shared/agent.completion.js';
 import { commercialTurnSchema, commercialResponseJsonSchema } from './commercial.schema.js';
 import { EMPTY_COLLECTED_DATA, mergeCollectedData } from './commercial.schema.js';
-import type { PriceTableVariant, CommercialCollectedData } from './commercial.schema.js';
+import type {
+  PriceTableVariant,
+  CommercialCollectedData,
+  ConversationPhase,
+} from './commercial.schema.js';
 import { scoreLead, decideHandoff, canSendPriceTable } from './commercial.scoring.js';
 import { notifyGi, claimHandoffAlert } from '../shared/agent.handoff.js';
 import { retrieveKnowledgeContext } from '../../knowledge/knowledge.retrieval.js';
@@ -51,6 +55,7 @@ export async function runCommercialTurn(
   let sendPriceTable = false;
   let priceTableVariant: PriceTableVariant = 'geral';
   let collectedData: CommercialCollectedData = EMPTY_COLLECTED_DATA;
+  let conversationPhase: ConversationPhase | null = null;
   let turnFailed = false;
 
   try {
@@ -78,6 +83,7 @@ export async function runCommercialTurn(
     const closingTurn = decideHandoff(leadScore, collectedData, false).pauseAi;
     reply = sanitizeOutgoingText(turn.reply, emojiBudget({ history, isClosingTurn: closingTurn }));
     priceTableVariant = turn.price_table_variant;
+    conversationPhase = turn.conversation_phase;
 
     sendPriceTable = canSendPriceTable(turn.send_price_table, collectedData);
 
@@ -87,7 +93,14 @@ export async function runCommercialTurn(
       });
     }
 
-    await appendConversationTurn(conversation, message, reply, leadScore, collectedData);
+    await appendConversationTurn(
+      conversation,
+      message,
+      reply,
+      leadScore,
+      collectedData,
+      conversationPhase,
+    );
   } catch (err) {
     logger.error('commercial turn failed, using fallback reply', {
       errorMessage: (err as Error).message,
@@ -120,6 +133,7 @@ export async function runCommercialTurn(
     pauseAi: decision.pauseAi,
     sendPriceTable,
     priceTableVariant,
+    conversationPhase,
   };
 }
 

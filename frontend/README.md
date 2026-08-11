@@ -16,8 +16,9 @@ O backend precisa estar no ar (`cd backend && npm run dev`).
 
 ## Antes do primeiro acesso
 
-1. **Migration:** rodar `database/migrations/20260810000001_agent_prompts.sql`
-   no Supabase.
+1. **Migrations:** rodar, no Supabase e nesta ordem,
+   `database/migrations/20260810000001_agent_prompts.sql` e
+   `database/migrations/20260810000002_test_console.sql`.
 2. **Semente:** `cd backend && npm run seed:prompts` — leva os `.md` de
    `backend/agents/` para o banco.
 3. **Usuário:** criar a conta no Supabase em Authentication → Users → Add user.
@@ -47,6 +48,28 @@ e mesmo handoff. A resposta aparece bolha por bolha, como o lead receberia.
 
 O painel do lado direito mostra score do lead, dados coletados, se houve
 handoff, se a tabela de preços seria enviada e se a IA foi pausada.
+
+**Qual agente respondeu.** O roteador pode trocar de agente no meio da conversa,
+e a troca aparece marcada na linha do tempo ("Agente Comercial" / "Agente
+Suporte"), com barra azul nas respostas do comercial e roxa nas do suporte. As
+mensagens dos dois agentes aparecem juntas, em ordem cronológica — no banco elas
+vivem em linhas separadas.
+
+**Fase da conversa.** A trilha no topo do painel mostra em que passo do roteiro
+comercial o agente declarou estar no último turno: abertura, qualificação,
+conexão, preço, experimental ou objeção. Quem informa é o próprio agente, a cada
+resposta. O agente de suporte não usa esse fluxo e não declara fase.
+
+**Observações.** Cada resposta do agente aceita uma observação da equipe
+("repetiu pergunta", "inventou horário"). Uma por mensagem; salvar com o campo
+vazio apaga. As observações acompanham a conversa quando ela é salva.
+
+**Conversas salvas.** "Salvar conversa" congela a sessão atual com um nome —
+mensagens, score, dados coletados, fase e observações. Serve pra comparar o
+comportamento antes e depois de editar o prompt, já que a sessão viva é
+reaproveitada e zerada o tempo todo. A lista fica no fim do painel; abrir uma
+conversa salva entra em modo leitura, e "Voltar pra sessão ativa" retoma o
+teste. Apagar a sessão **não** apaga o que já foi salvo.
 
 A etiqueta no topo diz por onde o turno passou:
 

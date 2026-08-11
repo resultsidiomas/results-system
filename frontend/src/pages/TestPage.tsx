@@ -1,10 +1,37 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { api, type TurnResult } from '../lib/api';
+import {
+  api,
+  type AgentType,
+  type ConversationPhase,
+  type SavedConversationSummary,
+  type SessionState,
+  type TaggedMessage,
+  type TurnResult,
+} from '../lib/api';
 
-interface Bubble {
-  from: 'lead' | 'agente';
-  text: string;
-}
+const AGENT_LABELS: Record<AgentType, string> = {
+  commercial: 'Comercial',
+  support: 'Suporte',
+};
+
+/** Ordem do "Fluxo da conversa" em `commercial/prompt-v1.md`. */
+const PHASES: Array<{ key: ConversationPhase; label: string }> = [
+  { key: 'abertura', label: 'Abertura' },
+  { key: 'qualificacao', label: 'Qualificação' },
+  { key: 'conexao', label: 'Conexão' },
+  { key: 'preco', label: 'Preço' },
+  { key: 'experimental', label: 'Experimental' },
+  { key: 'objecao', label: 'Objeção' },
+];
+
+const EMPTY_STATE: SessionState = {
+  viaN8n: false,
+  messages: [],
+  leadScore: 0,
+  collectedData: {},
+  pausarIa: 'Não',
+  conversationPhase: null,
+};
 
 /**
  * Console de teste.
@@ -16,34 +43,52 @@ interface Bubble {
  */
 export default function TestPage() {
   const [sessionId, setSessionId] = useState('teste-1');
-  const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const [state, setState] = useState<SessionState>(EMPTY_STATE);
+  const [pending, setPending] = useState<TaggedMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [lastTurn, setLastTurn] = useState<TurnResult | null>(null);
-  const [state, setState] = useState<{ viaN8n: boolean; leadScore: number; collectedData: Record<string, unknown>; pausarIa: string } | null>(null);
   const [bypassN8n, setBypassN8n] = useState(false);
+
+  const [noteFor, setNoteFor] = useState<number | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+
+  const [saves, setSaves] = useState<SavedConversationSummary[]>([]);
+  const [viewingSave, setViewingSave] = useState<SavedConversationSummary | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
+  const readOnly = viewingSave !== null;
+  const messages = readOnly ? state.messages : [...state.messages, ...pending];
+
   useEffect(() => {
+    if (readOnly) return;
     void loadState();
   }, [sessionId]);
 
   useEffect(() => {
+    void loadSaves();
+  }, []);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [bubbles]);
+  }, [messages.length, sending]);
 
   async function loadState() {
     try {
-      const data = await api.sessionState(sessionId);
-      setState(data);
-      setBubbles(
-        data.messages.map((message) => ({
-          from: message.role === 'user' ? 'lead' : 'agente',
-          text: message.content,
-        })),
-      );
+      setState(await api.sessionState(sessionId));
+      setPending([]);
       setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function loadSaves() {
+    try {
+      const data = await api.listSavedConversations();
+      setSaves(data.saves);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -52,9 +97,20 @@ export default function TestPage() {
   async function send(event: FormEvent) {
     event.preventDefault();
     const message = input.trim();
-    if (!message || sending) return;
+    if (!message || sending || readOnly) return;
 
-    setBubbles((current) => [...current, { from: 'lead', text: message }]);
+    // A mensagem do lead aparece na hora; o backend devolve o histórico
+    // definitivo (com índice e agente) no `loadState` do fim do turno.
+    setPending([
+      {
+        index: -1,
+        role: 'user',
+        content: message,
+        at: new Date().toISOString(),
+        agentType: 'commercial',
+        note: null,
+      },
+    ]);
     setInput('');
     setSending(true);
     setError(null);
@@ -62,103 +118,265 @@ export default function TestPage() {
     try {
       const turn = await api.sendTestMessage(sessionId, message, bypassN8n);
       setLastTurn(turn);
-
-      // Mostra bolha por bolha, como o lead receberia no WhatsApp — é assim que
-      // dá pra ver se o fracionamento quebrou um link ou gerou bolha só com
-      // pontuação.
-      const received = turn.bubbles.length > 0 ? turn.bubbles : [turn.reply];
-      setBubbles((current) => [...current, ...received.map((text) => ({ from: 'agente' as const, text }))]);
-
       await loadState();
     } catch (err) {
       setError((err as Error).message);
+      setPending([]);
     } finally {
       setSending(false);
     }
   }
 
   async function reset() {
-    if (!window.confirm('Apagar essa sessão de teste (histórico, score e contato)?')) return;
+    if (!window.confirm('Apagar essa sessão de teste (histórico, score, contato e observações)?')) {
+      return;
+    }
+
     try {
       await api.resetSession(sessionId);
-      setBubbles([]);
       setLastTurn(null);
+      setStatus('Sessão zerada.');
       await loadState();
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
-  const collected = Object.entries(state?.collectedData ?? {}).filter(
+  async function saveConversation() {
+    const title = window.prompt('Nome pra essa conversa:', `${sessionId} — ${new Date().toLocaleDateString('pt-BR')}`);
+    if (!title?.trim()) return;
+
+    try {
+      await api.saveConversation(sessionId, title.trim());
+      setStatus(`Conversa salva como "${title.trim()}".`);
+      await loadSaves();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function openSave(save: SavedConversationSummary) {
+    try {
+      const full = await api.loadSavedConversation(save.id);
+      setState(full.payload);
+      setPending([]);
+      setViewingSave(save);
+      setLastTurn(null);
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function removeSave(save: SavedConversationSummary) {
+    if (!window.confirm(`Apagar a conversa salva "${save.title}"?`)) return;
+
+    try {
+      await api.deleteSavedConversation(save.id);
+      if (viewingSave?.id === save.id) await backToLive();
+      await loadSaves();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function backToLive() {
+    setViewingSave(null);
+    setNoteFor(null);
+    await loadState();
+  }
+
+  function startNote(message: TaggedMessage) {
+    setNoteFor(message.index);
+    setNoteDraft(message.note ?? '');
+  }
+
+  async function submitNote(messageIndex: number) {
+    const note = noteDraft.trim();
+
+    try {
+      if (note === '') {
+        await api.deleteNote(sessionId, messageIndex);
+      } else {
+        await api.saveNote(sessionId, messageIndex, note);
+      }
+      setNoteFor(null);
+      await loadState();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  const collected = Object.entries(state.collectedData).filter(
     ([, value]) => value !== null && value !== undefined && value !== '',
   );
+  const noteCount = state.messages.filter((message) => message.note).length;
+  const currentPhase = PHASES.find((phase) => phase.key === state.conversationPhase);
 
   return (
     <div className="test-layout">
       <section className="chat">
         <header className="chat-header">
-          <label className="inline">
-            Sessão
-            <input
-              value={sessionId}
-              onChange={(e) => setSessionId(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
-            />
-          </label>
+          {readOnly ? (
+            <>
+              <span className="badge saved">conversa salva</span>
+              <strong className="saved-title">{viewingSave.title}</strong>
+              <button onClick={() => void backToLive()}>Voltar pra sessão ativa</button>
+            </>
+          ) : (
+            <>
+              <label className="inline">
+                Sessão
+                <input
+                  value={sessionId}
+                  onChange={(e) => setSessionId(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+                />
+              </label>
 
-          <span className={state?.viaN8n && !bypassN8n ? 'badge live' : 'badge'}>
-            {state?.viaN8n && !bypassN8n ? 'fluxo n8n real' : 'engine direto no backend'}
-          </span>
+              <span className={state.viaN8n && !bypassN8n ? 'badge live' : 'badge'}>
+                {state.viaN8n && !bypassN8n ? 'fluxo n8n real' : 'engine direto no backend'}
+              </span>
 
-          {state?.viaN8n && (
-            <label className="inline checkbox">
-              <input type="checkbox" checked={bypassN8n} onChange={(e) => setBypassN8n(e.target.checked)} />
-              pular n8n
-            </label>
+              {state.viaN8n && (
+                <label className="inline checkbox">
+                  <input
+                    type="checkbox"
+                    checked={bypassN8n}
+                    onChange={(e) => setBypassN8n(e.target.checked)}
+                  />
+                  pular n8n
+                </label>
+              )}
+
+              <div className="header-actions">
+                <button onClick={() => void saveConversation()} disabled={messages.length === 0}>
+                  Salvar conversa
+                </button>
+                <button onClick={() => void reset()}>Zerar sessão</button>
+              </div>
+            </>
           )}
-
-          <button onClick={() => void reset()}>Zerar sessão</button>
         </header>
 
         <div className="bubbles">
-          {bubbles.length === 0 && (
+          {messages.length === 0 && (
             <p className="muted">
               Nenhuma mensagem ainda. Escreva como se fosse o lead — a conversa roda de verdade, mas
               nada é enviado para o WhatsApp.
             </p>
           )}
-          {bubbles.map((bubble, index) => (
-            <div key={index} className={`bubble ${bubble.from}`}>
-              {bubble.text}
+
+          {messages.map((message, position) => {
+            const previous = messages[position - 1];
+            // Só marca a troca de agente, não repete a etiqueta em toda bolha:
+            // o que interessa observar é o momento em que o roteador trocou.
+            const switched = message.role === 'assistant' && previous?.agentType !== message.agentType;
+
+            return (
+              <div key={`${message.index}-${position}`} className={`turn ${message.role}`}>
+                {switched && (
+                  <div className={`agent-divider ${message.agentType}`}>
+                    <span>Agente {AGENT_LABELS[message.agentType]}</span>
+                  </div>
+                )}
+
+                <div
+                  className={
+                    message.role === 'user'
+                      ? 'bubble lead'
+                      : `bubble agente ${message.agentType}`
+                  }
+                >
+                  {message.content}
+                </div>
+
+                {message.role === 'assistant' && message.index >= 0 && (
+                  <div className="bubble-tools">
+                    {message.note && <p className="note">{message.note}</p>}
+
+                    {noteFor === message.index ? (
+                      <div className="note-editor">
+                        <textarea
+                          value={noteDraft}
+                          onChange={(e) => setNoteDraft(e.target.value)}
+                          placeholder="O que você observou nessa resposta?"
+                          rows={3}
+                          autoFocus
+                        />
+                        <div className="note-actions">
+                          <button className="primary" onClick={() => void submitNote(message.index)}>
+                            Salvar
+                          </button>
+                          <button onClick={() => setNoteFor(null)}>Cancelar</button>
+                          {message.note && (
+                            <span className="muted small">Apagar o texto remove a observação.</span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      !readOnly && (
+                        <button className="link" onClick={() => startNote(message)}>
+                          {message.note ? 'Editar observação' : 'Adicionar observação'}
+                        </button>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {sending && (
+            <div className="turn assistant">
+              <div className="bubble agente pending">digitando…</div>
             </div>
-          ))}
-          {sending && <div className="bubble agente pending">digitando…</div>}
+          )}
           <div ref={endRef} />
         </div>
 
         {error && <p className="error">{error}</p>}
+        {status && !error && <p className="status">{status}</p>}
 
-        <form className="composer" onSubmit={send}>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Mensagem do lead…"
-            disabled={sending}
-          />
-          <button className="primary" type="submit" disabled={sending || input.trim() === ''}>
-            Enviar
-          </button>
-        </form>
+        {!readOnly && (
+          <form className="composer" onSubmit={send}>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Mensagem do lead…"
+              disabled={sending}
+            />
+            <button className="primary" type="submit" disabled={sending || input.trim() === ''}>
+              Enviar
+            </button>
+          </form>
+        )}
       </section>
 
       <aside className="analysis">
-        <h3>Análise da conversa</h3>
+        <h3>Fase da conversa</h3>
+        <ol className="phases">
+          {PHASES.map((phase) => (
+            <li key={phase.key} className={phase.key === state.conversationPhase ? 'active' : ''}>
+              {phase.label}
+            </li>
+          ))}
+        </ol>
+        <p className="muted small">
+          {currentPhase
+            ? `O agente declarou estar em "${currentPhase.label}" no último turno.`
+            : 'O agente ainda não declarou fase. O agente de suporte não usa esse fluxo.'}
+        </p>
 
+        <h3>Análise da conversa</h3>
         <dl>
           <dt>Score do lead</dt>
-          <dd>{state?.leadScore ?? 0} / 10</dd>
+          <dd>{state.leadScore} / 10</dd>
 
           <dt>IA pausada</dt>
-          <dd className={state?.pausarIa === 'Sim' ? 'flag' : ''}>{state?.pausarIa ?? 'Não'}</dd>
+          <dd className={state.pausarIa === 'Sim' ? 'flag' : ''}>{state.pausarIa}</dd>
+
+          <dt>Observações registradas</dt>
+          <dd>{noteCount}</dd>
 
           {lastTurn && (
             <>
@@ -171,7 +389,7 @@ export default function TestPage() {
               {lastTurn.agentType && (
                 <>
                   <dt>Agente que respondeu</dt>
-                  <dd>{lastTurn.agentType === 'commercial' ? 'comercial' : 'suporte'}</dd>
+                  <dd>{AGENT_LABELS[lastTurn.agentType]}</dd>
                 </>
               )}
 
@@ -179,12 +397,18 @@ export default function TestPage() {
               <dd>{lastTurn.bubbles.length}</dd>
 
               <dt>Tabela de preços</dt>
-              <dd>{lastTurn.sendPriceTable ? `enviada (${lastTurn.priceTableVariant ?? 'geral'})` : 'não'}</dd>
+              <dd>
+                {lastTurn.sendPriceTable
+                  ? `enviada (${lastTurn.priceTableVariant ?? 'geral'})`
+                  : 'não'}
+              </dd>
 
               {lastTurn.handoff !== undefined && (
                 <>
                   <dt>Handoff para a equipe</dt>
-                  <dd className={lastTurn.handoff ? 'flag' : ''}>{lastTurn.handoff ? 'sim' : 'não'}</dd>
+                  <dd className={lastTurn.handoff ? 'flag' : ''}>
+                    {lastTurn.handoff ? 'sim' : 'não'}
+                  </dd>
                 </>
               )}
 
@@ -210,6 +434,28 @@ export default function TestPage() {
               </div>
             ))}
           </dl>
+        )}
+
+        <h3>Conversas salvas</h3>
+        {saves.length === 0 ? (
+          <p className="muted">Nenhuma conversa salva ainda.</p>
+        ) : (
+          <ul className="saves">
+            {saves.map((save) => (
+              <li key={save.id} className={viewingSave?.id === save.id ? 'active' : ''}>
+                <button className="link" onClick={() => void openSave(save)}>
+                  {save.title}
+                </button>
+                <span className="muted small">
+                  {new Date(save.created_at).toLocaleString('pt-BR')} · {save.message_count} mensagens
+                  {save.note_count > 0 ? ` · ${save.note_count} obs.` : ''}
+                </span>
+                <button className="link danger" onClick={() => void removeSave(save)}>
+                  apagar
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
 
         {lastTurn?.raw !== undefined && (

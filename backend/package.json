@@ -12,7 +12,7 @@
     "start": "node --env-file=../.env dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "ingest:knowledge": "tsx --env-file=../.env scripts/ingest-knowledge.ts",
-    "test:unit": "tsx --env-file=../.env tests/unit/text-sanitizer.smoke.ts && tsx --env-file=../.env tests/unit/agent.fracture.smoke.ts && tsx --env-file=../.env tests/unit/agent.emoji-budget.smoke.ts && tsx --env-file=../.env tests/unit/agent.completion.smoke.ts && tsx --env-file=../.env tests/unit/commercial.scoring.smoke.ts && tsx --env-file=../.env tests/unit/knowledge.chunker.smoke.ts && tsx --env-file=../.env tests/unit/support.schema.smoke.ts",
+    "test:unit": "tsx --env-file=../.env tests/unit/text-sanitizer.smoke.ts && tsx --env-file=../.env tests/unit/agent.fracture.smoke.ts && tsx --env-file=../.env tests/unit/agent.emoji-budget.smoke.ts && tsx --env-file=../.env tests/unit/agent.completion.smoke.ts && tsx --env-file=../.env tests/unit/commercial.scoring.smoke.ts && tsx --env-file=../.env tests/unit/knowledge.chunker.smoke.ts && tsx --env-file=../.env tests/unit/support.schema.smoke.ts && tsx --env-file=../.env tests/unit/test-console.merge.smoke.ts",
     "eval:commercial": "tsx --env-file=../.env tests/e2e/commercial.eval.ts",
     "eval:support": "tsx --env-file=../.env tests/e2e/support.eval.ts",
     "reset:memory": "tsx --env-file=../.env scripts/reset-memory.ts",

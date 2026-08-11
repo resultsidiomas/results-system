@@ -9,6 +9,59 @@ Por que: justificativa
 Arquivos: lista
 Impacto: o que essa mudanca afeta
 
+## [2026-08-10] - M4: deploy do painel, fase da conversa e área de testes com registro
+
+O que:
+1. **Painel não subia na VPS.** Só existia serviço do backend no EasyPanel — o
+   link abria a API (JSON). `frontend/` nunca teve artefato de build. Criado
+   `frontend/Dockerfile` (Vite → nginx) e documentado o serviço separado.
+2. **Tela branca no deploy.** `lib/supabase.ts` dava `throw` no import quando as
+   `VITE_*` faltavam, quebrando o módulo antes do React montar. `lib/config.ts`
+   centraliza a leitura e `ConfigError` explica o que faltou. Detecta também
+   backend em HTTP com painel em HTTPS, que o navegador bloqueia e o `fetch`
+   reporta apenas como "Failed to fetch", sem status.
+3. **Fase da conversa (`conversation_phase`).** O agente comercial passa a
+   declarar, a cada turno, em que passo do roteiro está (abertura,
+   qualificação, conexão, preço, experimental, objeção). Declarado pelo modelo e
+   não derivado de `collected_data`: dado coletado diz o que o lead respondeu,
+   não onde a conversa está — um lead que já respondeu a qualificação inteira e
+   levantou objeção continuaria marcado como "qualificação". Coluna própria, não
+   `stage`, que é etapa do funil de CRM.
+4. **Histórico dos dois agentes unificado.** `conversations` tem uma linha por
+   `agent_type`; o console mostrava só a mais recente e **metade das mensagens
+   sumia** quando a conversa passava pelo comercial e pelo suporte.
+   `mergeConversations()` junta as duas por horário, marcando cada mensagem com
+   o agente que a tratou. Desempate por posição original porque pergunta e
+   resposta são gravadas com o mesmo timestamp.
+5. **Observações e conversas salvas.** `test_conversation_notes` guarda a
+   observação da equipe numa resposta específica; `test_conversation_saves`
+   congela a sessão com nome, mensagens, estado e observações. Snapshot é cópia,
+   não referência: "Zerar sessão" apagaria o histórico que a equipe quis manter.
+
+Arquivos: `frontend/Dockerfile`, `frontend/nginx.conf`, `frontend/.dockerignore`,
+`frontend/src/lib/config.ts`, `frontend/src/components/ConfigError.tsx`,
+`frontend/src/main.tsx`, `frontend/src/lib/api.ts`, `frontend/src/lib/supabase.ts`,
+`frontend/src/pages/TestPage.tsx`, `frontend/src/styles.css`, `frontend/README.md`,
+`backend/agents/commercial/prompt-v1.md`, `backend/src/agents/commercial/commercial.schema.ts`,
+`backend/src/agents/commercial/commercial.service.ts`, `backend/src/agents/shared/agent.types.ts`,
+`backend/src/agents/shared/agent.memory.pg.ts`, `backend/src/admin/test-chat.routes.ts`,
+`backend/src/admin/test-console.repository.ts`, `backend/server.ts`,
+`backend/tests/unit/test-console.merge.smoke.ts`,
+`database/migrations/20260810000002_test_console.sql`
+
+Impacto: exige rodar a migration nova antes do deploy.
+
+`conversation_phase` entra no schema estruturado com `strict: true`, então a
+OpenAI garante o campo e nenhum turno quebra por causa dele. Mas a **instrução**
+de como escolher a fase está em `commercial/prompt-v1.md`, e o prompt em runtime
+vem do banco (ADR-015): `seed:prompts` preserva o conteúdo já semeado e **não**
+leva a seção nova. Sem `npm run seed:prompts -- --force` (ou colar a seção pelo
+painel), o modelo preenche a fase por conta própria, sem os critérios — o campo
+aparece preenchido e parece certo, que é o modo de falhar mais fácil de não
+notar. `--force` descarta edições feitas pelo painel.
+
+Frontend precisa das `VITE_*` como **build args** e do backend em HTTPS.
+
 ## [2026-08-10] - M1+M2+M4: prompt centralizado no banco, 3 correções de comportamento e painel humano
 
 O que:

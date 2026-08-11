@@ -26,7 +26,8 @@ export interface TurnResult {
   via: 'n8n' | 'backend';
   reply: string;
   bubbles: string[];
-  agentType?: 'commercial' | 'support';
+  agentType?: AgentType;
+  conversationPhase?: ConversationPhase | null;
   handoff?: boolean;
   pauseAi?: boolean;
   pausarIa?: string | null;
@@ -38,12 +39,47 @@ export interface TurnResult {
   raw?: unknown;
 }
 
+export type AgentType = 'commercial' | 'support';
+
+export type ConversationPhase =
+  | 'abertura'
+  | 'qualificacao'
+  | 'conexao'
+  | 'preco'
+  | 'experimental'
+  | 'objecao';
+
+export interface TaggedMessage {
+  index: number;
+  role: 'user' | 'assistant';
+  content: string;
+  at: string | null;
+  /** Qual agente tratou a mensagem — o roteador pode trocar no meio da conversa. */
+  agentType: AgentType;
+  note: string | null;
+}
+
 export interface SessionState {
   viaN8n: boolean;
-  messages: Array<{ role: string; content: string; at?: string }>;
+  messages: TaggedMessage[];
   leadScore: number;
   collectedData: Record<string, unknown>;
   pausarIa: string;
+  conversationPhase: ConversationPhase | null;
+}
+
+export interface SavedConversationSummary {
+  id: string;
+  session_id: string;
+  title: string;
+  created_by: string | null;
+  created_at: string;
+  message_count: number;
+  note_count: number;
+}
+
+export interface SavedConversation extends SavedConversationSummary {
+  payload: SessionState;
 }
 
 /**
@@ -57,14 +93,26 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!token) throw new Error('Sessão expirada. Faça login de novo.');
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${token}`,
-      ...(init.headers ?? {}),
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch {
+    // `fetch` só lança em falha de rede — bloqueio do navegador, DNS, conexão
+    // recusada, CORS. Nunca em resposta de erro do servidor. O "Failed to fetch"
+    // padrão não diz nem qual endereço foi tentado.
+    throw new Error(
+      `Não foi possível falar com o backend em ${BASE_URL || '(VITE_API_URL vazia)'}. ` +
+        'Verifique se o serviço está no ar e se a URL está correta e em HTTPS.',
+    );
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -112,4 +160,29 @@ export const api = {
 
   resetSession: (sessionId: string) =>
     request<{ status: string }>(`/api/v1/admin/test-chat/${sessionId}`, { method: 'DELETE' }),
+
+  saveNote: (sessionId: string, messageIndex: number, note: string) =>
+    request<{ message_index: number; note: string }>(
+      `/api/v1/admin/test-chat/${sessionId}/notes/${messageIndex}`,
+      { method: 'PUT', body: JSON.stringify({ note }) },
+    ),
+
+  deleteNote: (sessionId: string, messageIndex: number) =>
+    request<{ status: string }>(`/api/v1/admin/test-chat/${sessionId}/notes/${messageIndex}`, {
+      method: 'DELETE',
+    }),
+
+  saveConversation: (sessionId: string, title: string) =>
+    request<SavedConversationSummary>(`/api/v1/admin/test-chat/${sessionId}/save`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+
+  listSavedConversations: () =>
+    request<{ saves: SavedConversationSummary[] }>('/api/v1/admin/test-saves'),
+
+  loadSavedConversation: (id: string) => request<SavedConversation>(`/api/v1/admin/test-saves/${id}`),
+
+  deleteSavedConversation: (id: string) =>
+    request<{ status: string }>(`/api/v1/admin/test-saves/${id}`, { method: 'DELETE' }),
 };

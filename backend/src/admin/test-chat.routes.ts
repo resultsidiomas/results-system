@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logger } from '../shared/logger.js';
-import { BadRequestError } from '../shared/http-errors.js';
+import { BadRequestError, NotFoundError } from '../shared/http-errors.js';
 import { requireAdmin } from './admin.auth.js';
 import {
   findOrCreateContact,
@@ -10,6 +10,7 @@ import {
 } from '../crm/leads/contacts.repository.js';
 import { findConversation } from '../agents/shared/agent.memory.pg.js';
 import type { Conversation } from '../agents/shared/agent.memory.pg.js';
+import type { ChatMessage } from '../agents/shared/agent.types.js';
 import { clearChatHistory, getChatHistory } from '../agents/shared/agent.memory.redis.js';
 import { clearBlock } from '../agents/shared/agent.pause.js';
 import { routeAgent } from '../agents/router/agent.router.js';
@@ -17,6 +18,16 @@ import { runCommercialTurn } from '../agents/commercial/commercial.service.js';
 import { runSupportTurn } from '../agents/support/support.service.js';
 import { fractureMessage } from '../agents/shared/agent.fracture.js';
 import { isN8nTestConfigured, runN8nTestFlow } from '../testing/n8n-test-flow.js';
+import {
+  listNotes,
+  upsertNote,
+  deleteNote,
+  deleteNotesOfSession,
+  createSave,
+  listSaves,
+  findSave,
+  deleteSave,
+} from './test-console.repository.js';
 
 const TEST_INSTANCE = 'test-console';
 
@@ -32,6 +43,9 @@ const messageBodySchema = z.object({
   bypassN8n: z.boolean().optional(),
 });
 
+const noteBodySchema = z.object({ note: z.string().min(1).max(2000) });
+const saveBodySchema = z.object({ title: z.string().min(1).max(120) });
+
 /** O contato de teste é um telefone sintético: nunca colide com número real da UAZAPI. */
 function testPhone(sessionId: string): string {
   return `test-${sessionId}`;
@@ -43,46 +57,111 @@ function parseSessionId(request: FastifyRequest): string {
   return parsed.data;
 }
 
-/** Contato pode ter conversa comercial e de suporte (roteadas por mensagem) — mostra a mais recente. */
-function pickMostRecent(a: Conversation | null, b: Conversation | null): Conversation | null {
-  if (!a) return b;
-  if (!b) return a;
-  return new Date(a.updated_at) > new Date(b.updated_at) ? a : b;
+function parseMessageIndex(request: FastifyRequest): number {
+  const raw = (request.params as { messageIndex?: string }).messageIndex;
+  const parsed = z.coerce.number().int().min(0).safeParse(raw);
+  if (!parsed.success) throw new BadRequestError('índice de mensagem inválido');
+  return parsed.data;
+}
+
+export interface TaggedMessage {
+  index: number;
+  role: 'user' | 'assistant';
+  content: string;
+  at: string | null;
+  agentType: 'commercial' | 'support';
+  note: string | null;
+}
+
+/**
+ * Junta as conversas dos dois agentes numa linha do tempo só.
+ *
+ * `conversations` tem uma linha por `agent_type`, então uma conversa que passou
+ * pelo comercial e pelo suporte vive partida em duas. A tela mostrava só a mais
+ * recente — metade das mensagens sumia, e não dava pra ver o momento em que o
+ * roteador trocou de agente, que é justamente o que se quer observar num teste.
+ *
+ * Empate de horário é a regra, não a exceção: `appendConversationTurn` grava a
+ * mensagem do lead e a resposta com o mesmo timestamp. Por isso o desempate é a
+ * posição original dentro da própria conversa.
+ */
+export function mergeConversations(conversations: Conversation[]): TaggedMessage[] {
+  const flattened = conversations.flatMap((conversation) =>
+    (conversation.messages ?? []).map((message: ChatMessage, position: number) => ({
+      role: message.role,
+      content: message.content,
+      at: message.at ?? null,
+      agentType: conversation.agent_type,
+      position,
+    })),
+  );
+
+  return flattened
+    .sort((a, b) => {
+      const timeA = a.at ? Date.parse(a.at) : 0;
+      const timeB = b.at ? Date.parse(b.at) : 0;
+      if (timeA !== timeB) return timeA - timeB;
+      return a.position - b.position;
+    })
+    .map((message, index) => ({
+      index,
+      role: message.role,
+      content: message.content,
+      at: message.at,
+      agentType: message.agentType,
+      note: null,
+    }));
+}
+
+/** Estado completo da sessão — usado pela tela e pelo snapshot, que precisam ser idênticos. */
+async function buildSessionState(sessionId: string) {
+  const contact = await findContactByPhone(testPhone(sessionId));
+
+  const base = {
+    viaN8n: isN8nTestConfigured(),
+    messages: [] as TaggedMessage[],
+    leadScore: 0,
+    collectedData: {} as Record<string, unknown>,
+    pausarIa: 'Não',
+    conversationPhase: null as string | null,
+  };
+
+  if (!contact) return base;
+
+  const [commercial, support, notes] = await Promise.all([
+    findConversation(contact.id, 'commercial'),
+    findConversation(contact.id, 'support'),
+    listNotes(sessionId),
+  ]);
+
+  const conversations = [commercial, support].filter((item): item is Conversation => item !== null);
+  if (conversations.length === 0) return { ...base, pausarIa: contact.pausar_ia };
+
+  const noteByIndex = new Map(notes.map((note) => [note.message_index, note.note]));
+  const messages = mergeConversations(conversations).map((message) => ({
+    ...message,
+    note: noteByIndex.get(message.index) ?? null,
+  }));
+
+  // Score e dados coletados são do comercial: o suporte não qualifica lead.
+  // A fase também — só o agente comercial declara passo de roteiro.
+  return {
+    ...base,
+    messages,
+    leadScore: commercial?.lead_score ?? 0,
+    collectedData: commercial?.collected_data ?? {},
+    conversationPhase: commercial?.conversation_phase ?? null,
+    pausarIa: contact.pausar_ia,
+  };
 }
 
 export async function adminTestChatRoutes(app: FastifyInstance) {
-  /** Estado da sessão: histórico, score, dados coletados e qual caminho de teste está ativo. */
+  /** Estado da sessão: histórico dos dois agentes, score, dados coletados, fase e observações. */
   app.get('/api/v1/admin/test-chat/:sessionId', async (request: FastifyRequest, reply: FastifyReply) => {
     await requireAdmin(request);
     const sessionId = parseSessionId(request);
 
-    const contact = await findContactByPhone(testPhone(sessionId));
-
-    const base = {
-      viaN8n: isN8nTestConfigured(),
-      messages: [] as unknown[],
-      leadScore: 0,
-      collectedData: {},
-      pausarIa: 'Não',
-    };
-
-    if (!contact) return reply.send(base);
-
-    const [commercial, support] = await Promise.all([
-      findConversation(contact.id, 'commercial'),
-      findConversation(contact.id, 'support'),
-    ]);
-
-    const conversation = pickMostRecent(commercial, support);
-    if (!conversation) return reply.send({ ...base, pausarIa: contact.pausar_ia });
-
-    return reply.send({
-      ...base,
-      messages: conversation.messages,
-      leadScore: conversation.lead_score,
-      collectedData: conversation.collected_data,
-      pausarIa: contact.pausar_ia,
-    });
+    return reply.send(await buildSessionState(sessionId));
   });
 
   /**
@@ -148,6 +227,7 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
         escalationReason: turn.escalationReason,
         sendPriceTable: false,
         leadScore: 0,
+        conversationPhase: null,
         elapsedMs: Date.now() - startedAt,
       });
     }
@@ -161,6 +241,7 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
       agentType,
       leadScore: turn.leadScore,
       handoff: turn.handoff,
+      phase: turn.conversationPhase,
       by: user.email,
     });
 
@@ -175,22 +256,109 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
       sendPriceTable: turn.sendPriceTable,
       priceTableVariant: turn.priceTableVariant,
       leadScore: turn.leadScore,
+      conversationPhase: turn.conversationPhase,
       elapsedMs: Date.now() - startedAt,
     });
   });
 
-  /** Zera a sessão: memória curta, bloqueio, contato e conversas. */
+  /** Zera a sessão: memória curta, bloqueio, contato, conversas e observações. */
   app.delete('/api/v1/admin/test-chat/:sessionId', async (request: FastifyRequest, reply: FastifyReply) => {
     const user = await requireAdmin(request);
     const sessionId = parseSessionId(request);
 
     await clearChatHistory(TEST_INSTANCE, sessionId);
     await clearBlock(sessionId);
+    // As observações apontam para índices de mensagem. Sem apagar junto, elas
+    // reapareceriam grudadas nas mensagens da próxima conversa.
+    await deleteNotesOfSession(sessionId);
 
     const contact = await findContactByPhone(testPhone(sessionId));
     if (contact) await deleteContact(contact.id);
 
     logger.info('test console session reset', { sessionId, by: user.email });
     return reply.send({ status: 'reset' });
+  });
+
+  // ---------- observações ----------
+
+  app.put(
+    '/api/v1/admin/test-chat/:sessionId/notes/:messageIndex',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = await requireAdmin(request);
+      const sessionId = parseSessionId(request);
+      const messageIndex = parseMessageIndex(request);
+
+      const parsed = noteBodySchema.safeParse(request.body);
+      if (!parsed.success) throw new BadRequestError('observação vazia ou longa demais');
+
+      const note = await upsertNote(sessionId, messageIndex, parsed.data.note.trim(), user.email);
+      return reply.send(note);
+    },
+  );
+
+  app.delete(
+    '/api/v1/admin/test-chat/:sessionId/notes/:messageIndex',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      await requireAdmin(request);
+      const sessionId = parseSessionId(request);
+      const messageIndex = parseMessageIndex(request);
+
+      await deleteNote(sessionId, messageIndex);
+      return reply.send({ status: 'deleted' });
+    },
+  );
+
+  // ---------- conversas salvas ----------
+
+  /** Congela a sessão atual. Ver comentário da tabela: é cópia, não referência. */
+  app.post('/api/v1/admin/test-chat/:sessionId/save', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await requireAdmin(request);
+    const sessionId = parseSessionId(request);
+
+    const parsed = saveBodySchema.safeParse(request.body);
+    if (!parsed.success) throw new BadRequestError('título obrigatório (até 120 caracteres)');
+
+    const state = await buildSessionState(sessionId);
+    if (state.messages.length === 0) throw new BadRequestError('conversa vazia, nada a salvar');
+
+    const saved = await createSave(sessionId, parsed.data.title.trim(), state, user.email);
+    logger.info('test conversation saved', { sessionId, saveId: saved.id, by: user.email });
+
+    return reply.send(saved);
+  });
+}
+
+/**
+ * Prefixo próprio (`test-saves`, não `test-chat/...`) porque a lista não
+ * pertence a nenhuma sessão: ela cruza todas.
+ */
+export async function adminTestSaveRoutes(app: FastifyInstance) {
+  app.get('/api/v1/admin/test-saves', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireAdmin(request);
+    return reply.send({ saves: await listSaves() });
+  });
+
+  app.get('/api/v1/admin/test-saves/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireAdmin(request);
+
+    const parsed = z.string().uuid().safeParse((request.params as { id?: string }).id);
+    if (!parsed.success) throw new BadRequestError('id inválido');
+
+    const save = await findSave(parsed.data);
+    if (!save) throw new NotFoundError('conversa salva não encontrada');
+
+    return reply.send(save);
+  });
+
+  app.delete('/api/v1/admin/test-saves/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await requireAdmin(request);
+
+    const parsed = z.string().uuid().safeParse((request.params as { id?: string }).id);
+    if (!parsed.success) throw new BadRequestError('id inválido');
+
+    await deleteSave(parsed.data);
+    logger.info('test conversation save deleted', { saveId: parsed.data, by: user.email });
+
+    return reply.send({ status: 'deleted' });
   });
 }

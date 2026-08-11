@@ -8,7 +8,10 @@ export interface Conversation {
   messages: ChatMessage[];
   lead_score: number;
   collected_data: Record<string, unknown>;
+  /** Etapa do funil de CRM (`novo_lead`, `qualificado`…) — não confundir com `conversation_phase`. */
   stage: string;
+  /** Passo do roteiro em que o agente está, declarado por ele a cada turno. */
+  conversation_phase: string | null;
   updated_at: string;
 }
 
@@ -58,6 +61,7 @@ export async function appendConversationTurn(
   assistantMessage: string,
   leadScore: number,
   collectedData: Record<string, unknown>,
+  conversationPhase?: string | null,
 ): Promise<void> {
   const now = new Date().toISOString();
   const messages: ChatMessage[] = [
@@ -72,6 +76,9 @@ export async function appendConversationTurn(
       messages,
       lead_score: leadScore,
       collected_data: { ...conversation.collected_data, ...collectedData },
+      // `undefined` mantém o valor anterior: o suporte não declara fase e não
+      // deve zerar a que o comercial gravou na mesma conversa.
+      ...(conversationPhase === undefined ? {} : { conversation_phase: conversationPhase }),
     })
     .eq('id', conversation.id);
 

@@ -1,4 +1,4 @@
-import type { PriceTableVariant } from '../commercial/commercial.schema.js';
+import type { ConversationPhase, PriceTableVariant } from '../commercial/commercial.schema.js';
 import type { EscalationReason } from '../support/support.schema.js';
 
 export interface ChatMessage {
@@ -16,6 +16,8 @@ export interface AgentTurnResult {
   pauseAi: boolean;
   sendPriceTable: boolean;
   priceTableVariant: PriceTableVariant;
+  /** Passo do roteiro declarado pelo agente. `null` quando o turno falhou e caiu no fallback. */
+  conversationPhase: ConversationPhase | null;
 }
 
 export interface SupportTurnResult {

@@ -62,3 +62,30 @@ A etiqueta no topo diz por onde o turno passou:
 "Zerar sessão" apaga histórico, score e contato de teste. Trocar o nome da
 sessão abre uma conversa nova e independente — útil para testar cenários
 diferentes lado a lado.
+
+## Deploy (EasyPanel)
+
+O frontend é um serviço **separado** do backend — precisa da própria entrada
+no EasyPanel, apontando pro Dockerfile desta pasta.
+
+1. **App → Create Service → App**, source = mesmo repo GitHub do backend.
+2. **Build path / context:** `frontend` (o Dockerfile está em `frontend/Dockerfile`,
+   não na raiz do repo).
+3. **Build method:** Dockerfile.
+4. **Build args** — as três `VITE_*` são gravadas no bundle em tempo de
+   *build*, não de runtime. Se o EasyPanel só oferecer "Environment
+   Variables" sem opção de build arg, confirme que ele repassa essas
+   variáveis para o `docker build` (algumas versões têm um toggle tipo "Build
+   Variable" por variável); senão o bundle sobe com `VITE_API_URL` etc.
+   vazios e o painel carrega em branco, mesmo com o container "no ar":
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_API_URL` → URL pública do serviço do backend (ex.:
+     `https://api.results.com`, sem barra no fim)
+5. **Porta do container:** 80 (nginx servindo `dist/`).
+6. Configurar domínio/subdomínio próprio (ex.: `app.results.com`) — não usar
+   o mesmo domínio do backend, senão o link abre a API em vez do painel.
+
+Depois do primeiro deploy, qualquer edição nas `VITE_*` exige **rebuild**
+(redeploy), não só restart — são valores embutidos no JS gerado, não lidos do
+ambiente do container em runtime.

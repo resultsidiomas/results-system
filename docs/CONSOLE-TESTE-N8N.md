@@ -20,7 +20,51 @@ parece mais real do que foi é pior do que não testar.
 
 ## O que precisa ser adicionado no fluxo n8n
 
-O fluxo de atendimento continua o mesmo. A mudança é um desvio no fim.
+**O webhook de produção não é alterado.** O teste entra por um webhook próprio,
+que reaproveita todo o resto do fluxo:
+
+```
+Webhook (produção, UAZAPI) ─┐
+                            ├─► normalização ─► debounce ─► /n8n-agent/run
+Webhook Teste ──────────────┘                                     │
+(Respond to Webhook)                                              ▼
+                                                     Fracionar ─► Split Out
+                                                              ─► Loop Over Items
+                                                                  │        │
+                                                       (cada bolha)│        │(done)
+                                                                  ▼        ▼
+                                                            É teste?   [produção:
+                                                            ├ não ─► UAZAPI  fim]
+                                                            └ sim ─► (volta    │
+                                                                  pro loop)    ▼
+                                                                        É teste?
+                                                                        └ sim ─►
+                                                                   Montar resposta
+                                                                   ─► Respond to
+                                                                        Webhook
+```
+
+Por que o `Respond to Webhook` fica na saída **done** do loop, e não dentro
+dele: o node responde **uma única vez**. Dentro do loop, ele dispararia na
+primeira bolha e o console receberia só o primeiro pedaço da resposta — parecendo
+que o agente respondeu curto, quando na verdade o teste foi cortado.
+
+O loop continua rodando inteiro (inclusive o `Wait` entre bolhas). A única coisa
+que não acontece em teste é a chamada `POST /send/text` da UAZAPI.
+
+### Como o fluxo sabe que é teste
+
+Testar `testMode` do payload é frágil: o campo se perde no meio da normalização,
+do debounce e do Redis. O sinal confiável é o **telefone**, que atravessa o fluxo
+inteiro porque é ele que vai no `number` do envio:
+
+```
+{{ ($json.number || $json.remoteJid || $json.chatid || '').startsWith('test-') }}
+```
+
+O backend garante o prefixo `test-` na origem (`shared/test-contact.ts`), e é o
+mesmo sinal que a rota `/api/v1/n8n-agent/run` usa pra não alertar a Gi com dado
+fictício. Uma verdade só, checada nos dois lados.
 
 ### 1. Aceitar a marcação de teste no webhook
 
@@ -59,27 +103,112 @@ agente.
 O webhook precisa estar em modo **"Respond to Webhook"** (e não "Immediately"),
 senão o fluxo responde antes de ter a resposta do agente.
 
-### 2. Pular o debounce quando `testMode` for verdadeiro
+### 2. Debounce no teste (opcional)
 
-O `Wait` de debounce existe para juntar mensagens que o lead manda em
-sequência. No console a pessoa manda uma mensagem por vez e espera a resposta,
-então a espera só faz o teste demorar. Sugestão: um `IF` antes do `Wait`,
-mandando `testMode = true` direto para o passo seguinte.
+O `Wait` de debounce existe para juntar mensagens que o lead manda em sequência.
+No console a pessoa manda uma mensagem por vez e espera a resposta, então a
+espera só faz o teste demorar.
 
-Se preferir manter o debounce ligado no teste (para exercitar também esse
-trecho), suba `N8N_TEST_TIMEOUT_MS` acima do tempo de espera do fluxo.
+**Recomendado: manter o debounce ligado também no teste.** O ponto do console é
+exercitar o fluxo real, e o debounce é parte dele. Basta que
+`N8N_TEST_TIMEOUT_MS` (default 90s) seja maior que a espera do fluxo somada ao
+tempo de resposta do agente.
+
+Se a espera atrapalhar o ritmo de trabalho, um `IF` com a mesma condição de
+telefone (`startsWith('test-')`) antes do `Wait` pula a espera — ao custo de o
+teste deixar de cobrir esse trecho.
 
 ### 3. Desviar do envio da UAZAPI
 
 No ponto onde hoje o fluxo chama `POST {UAZAPI_URL}/send/text` dentro do loop
-de blocos:
+de blocos, entra o `IF` de telefone:
 
-- `IF testMode = true` → **não envia**, segue para o `Respond to Webhook`.
-- `IF testMode = false` → caminho normal de produção, sem alteração.
+- **é teste** → não envia; volta para o `Loop Over Items` (a iteração segue
+  normalmente, inclusive o `Wait`).
+- **é produção** → caminho atual, sem alteração.
 
-O mesmo vale para a chamada de `/api/v1/n8n-agent/send-price-table`: em teste
-ela não deve rodar. O painel mostra `sendPriceTable: true` na análise, que é a
-informação que interessa (se a tabela **seria** enviada e qual variante).
+**Não responda aqui.** O `Respond to Webhook` fica na saída `done` do loop —
+dentro do loop ele dispararia na primeira bolha e devolveria a resposta cortada.
+
+O mesmo `IF` vale para a chamada de `/api/v1/n8n-agent/send-price-table`: em
+teste ela não deve rodar. O painel mostra `sendPriceTable: true` na análise, que
+é a informação que interessa (se a tabela **seria** enviada e qual variante).
+
+### 3.1 Nodes para colar no n8n
+
+Nomes de node variam de fluxo pra fluxo — ajuste as referências `$("...")`.
+
+**Webhook Teste** (novo, não substitui o de produção):
+
+```json
+{
+  "name": "Webhook Teste",
+  "type": "n8n-nodes-base.webhook",
+  "typeVersion": 2,
+  "parameters": {
+    "httpMethod": "POST",
+    "path": "results-teste",
+    "responseMode": "responseNode",
+    "options": {}
+  }
+}
+```
+
+A URL desse node é o valor de `N8N_TEST_WEBHOOK_URL`. Ligue a saída dele no
+mesmo node em que o webhook de produção entrega a mensagem normalizada.
+
+**É teste?** — antes do `POST /send/text`, dentro do loop:
+
+```json
+{
+  "name": "É teste?",
+  "type": "n8n-nodes-base.if",
+  "typeVersion": 2,
+  "parameters": {
+    "conditions": {
+      "combinator": "and",
+      "options": { "caseSensitive": true, "typeValidation": "loose", "version": 2 },
+      "conditions": [
+        {
+          "leftValue": "={{ ($json.number || $json.remoteJid || $json.chatid || '').toString() }}",
+          "rightValue": "test-",
+          "operator": { "type": "string", "operation": "startsWith" }
+        }
+      ]
+    },
+    "options": {}
+  }
+}
+```
+
+- saída **true** (é teste) → volta pro `Loop Over Items` (não envia nada)
+- saída **false** (produção) → `HTTP Request` da UAZAPI, sem alteração
+
+**Montar resposta do teste** — na saída `done` do loop:
+
+```javascript
+// Bolhas: os mesmos itens que teriam ido pra UAZAPI, na mesma ordem.
+const bolhas = $('Split Out').all().map((item) =>
+  item.json.text ?? item.json.bloco ?? item.json.output ?? String(item.json),
+);
+
+// Resposta crua do backend, pro painel mostrar score, handoff e tabela.
+const agente = $('/n8n-agent/run').first().json;
+
+return [{
+  json: {
+    reply: bolhas.join('\n'),
+    bubbles: bolhas,
+    sendPriceTable: agente.sendPriceTable ?? false,
+    priceTableVariant: agente.priceTableVariant ?? null,
+    pausarIa: agente.pausarIa ?? 'Não',
+  },
+}];
+```
+
+Depois desse Code node, o `Respond to Webhook`. Em produção a saída `done` segue
+como já segue hoje — só acrescente um `IF` igual ao de cima se o mesmo ramo for
+usado pelos dois.
 
 ### 4. Responder ao chamador
 

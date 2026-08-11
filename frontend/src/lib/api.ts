@@ -1,6 +1,5 @@
 import { supabase } from './supabase';
-
-const BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+import { apiBaseUrl as BASE_URL } from './config';
 
 export interface PromptBlock {
   block_key: string;

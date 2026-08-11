@@ -49,6 +49,27 @@ input, textarea {
 .status { color: #067647; background: #ecfdf3; border: 1px solid #abefc6; padding: 8px 11px; border-radius: 6px; }
 .flag { color: var(--flag); font-weight: 600; }
 
+/* ---------- erro de configuração ---------- */
+.config-error {
+  max-width: 620px;
+  margin: 72px auto;
+  padding: 24px 28px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  line-height: 1.55;
+}
+.config-error h1 { font-size: 20px; margin: 0 0 14px; }
+.config-error p { margin: 0 0 14px; }
+.config-error ul { margin: 0 0 18px; padding-left: 20px; }
+.config-error li { margin-bottom: 6px; }
+.config-error code {
+  background: #f1f3f5;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+}
+
 /* ---------- login ---------- */
 .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 .login-card {

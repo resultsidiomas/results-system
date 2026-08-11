@@ -32,17 +32,24 @@ extras:
 {
   "testMode": true,
   "instanceName": "test-console",
-  "chat": { "wa_chatid": "teste-1", "wa_name": "Teste (Console)" },
+  "chat": { "wa_chatid": "test-teste-1", "wa_name": "Teste (Console)" },
   "message": {
     "id": "test-1754838000000",
     "content": "quero fazer aula de inglês",
     "text": "quero fazer aula de inglês",
     "messageType": "conversation",
     "fromMe": false,
-    "chatid": "teste-1"
+    "chatid": "test-teste-1"
   }
 }
 ```
+
+> ⚠️ **`chatid` vem prefixado com `test-` e o fluxo não pode reescrever isso.**
+> O fluxo repassa esse valor como `sessionId` para `/api/v1/n8n-agent/run`, que
+> deriva dele o telefone do contato. É o prefixo que faz o backend reconhecer a
+> conversa como teste — sem ele o contato vira lead comum: some do painel (que
+> procura `test-{sessão}`), aparece na aba "Conversas reais", sobrevive ao
+> "Zerar sessão" e dispara alerta de WhatsApp para a Gi com dado fictício.
 
 Header opcional `x-test-secret`, com o valor de `N8N_TEST_SECRET`. Se você
 configurar o secret, o fluxo deve rejeitar a execução quando ele não bater —
@@ -114,12 +121,12 @@ conversa, memória curta e bloqueio.
 
 Duas ressalvas que valem saber ao ler um teste:
 
-1. **O alerta para a Gi não é disparado** no caminho `backend`
-   (`notifyHandoff: false`), para não mandar WhatsApp com dado fictício. Já no
-   caminho `n8n`, o fluxo chama `/api/v1/n8n-agent/run` de produção, que
-   **alerta de verdade** se o handoff acontecer. Se isso incomodar, mande o
-   fluxo passar `notifyHandoff: false` no body quando `testMode` for
-   verdadeiro (exige aceitar o campo na rota `n8n-agent.routes.ts`).
+1. **O alerta para a Gi não é disparado em nenhum dos dois caminhos.** No
+   caminho `backend` por `notifyHandoff: false`; no caminho `n8n` porque
+   `/api/v1/n8n-agent/run` reconhece o telefone sintético (`isTestPhone`) e
+   suprime o aviso sozinha — o fluxo não precisa sinalizar nada. O handoff
+   continua sendo **calculado** e aparece na análise do painel, que é o que
+   interessa observar; só o WhatsApp com dado fictício deixa de sair.
 2. **A checkbox "pular n8n"** força o caminho direto mesmo com o webhook
    configurado. Serve para isolar onde um problema está: se o comportamento
    errado aparece nos dois caminhos, é do agente; se aparece só via n8n, é do

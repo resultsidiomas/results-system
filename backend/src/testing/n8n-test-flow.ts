@@ -1,5 +1,6 @@
 import { env } from '../config/env.js';
 import { logger } from '../shared/logger.js';
+import { testPhone } from '../shared/test-contact.js';
 
 /**
  * Dispara o fluxo REAL do n8n em modo de teste.
@@ -40,6 +41,17 @@ export async function runN8nTestFlow(params: {
   const url = env.N8N_TEST_WEBHOOK_URL;
   if (!url) throw new Error('N8N_TEST_WEBHOOK_URL não configurada');
 
+  // O identificador precisa ir JÁ prefixado.
+  //
+  // O fluxo do n8n repassa este valor como `sessionId` para
+  // `/api/v1/n8n-agent/run`, que deriva o telefone do contato dele. Mandando a
+  // sessão crua ("teste-1"), o contato nascia sem o prefixo e deixava de ser
+  // reconhecível como teste: sumia do painel (que procura `test-teste-1`),
+  // entrava na aba de conversas reais como lead de verdade, sobrevivia ao
+  // "Zerar sessão" e disparava alerta de WhatsApp para a equipe com dado
+  // fictício.
+  const chatId = testPhone(params.sessionId);
+
   // Payload no mesmo formato que a UAZAPI entrega ao webhook (ver
   // docs/MAPA_ARQUITETURA_AGENTE_N8N.md § "Contrato de entrada da UAZAPI"),
   // para o fluxo não precisar de um caminho de parsing próprio só pro teste.
@@ -47,7 +59,7 @@ export async function runN8nTestFlow(params: {
     testMode: true,
     instanceName: params.instance,
     chat: {
-      wa_chatid: params.sessionId,
+      wa_chatid: chatId,
       wa_name: params.senderName,
     },
     message: {
@@ -56,7 +68,7 @@ export async function runN8nTestFlow(params: {
       text: params.message,
       messageType: 'conversation',
       fromMe: false,
-      chatid: params.sessionId,
+      chatid: chatId,
     },
   };
 

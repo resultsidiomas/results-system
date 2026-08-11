@@ -18,6 +18,10 @@ import { runCommercialTurn } from '../agents/commercial/commercial.service.js';
 import { runSupportTurn } from '../agents/support/support.service.js';
 import { fractureMessage } from '../agents/shared/agent.fracture.js';
 import { isN8nTestConfigured, runN8nTestFlow } from '../testing/n8n-test-flow.js';
+import { env } from '../config/env.js';
+// O contato de teste é um telefone sintético: nunca colide com número real da
+// UAZAPI, e é o que faz o backend e o fluxo n8n concordarem sobre o que é teste.
+import { testPhone } from '../shared/test-contact.js';
 import {
   listNotes,
   upsertNote,
@@ -46,11 +50,6 @@ const messageBodySchema = z.object({
 
 const noteBodySchema = z.object({ note: z.string().min(1).max(2000) });
 const saveBodySchema = z.object({ title: z.string().min(1).max(120) });
-
-/** O contato de teste é um telefone sintético: nunca colide com número real da UAZAPI. */
-function testPhone(sessionId: string): string {
-  return `test-${sessionId}`;
-}
 
 function parseSessionId(request: FastifyRequest): string {
   const parsed = sessionIdSchema.safeParse((request.params as { sessionId?: string }).sessionId);
@@ -267,8 +266,21 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
     const user = await requireAdmin(request);
     const sessionId = parseSessionId(request);
 
-    await clearChatHistory(TEST_INSTANCE, sessionId);
+    // A chave da memória curta é `chat:{instância}{remoteJid}`, e no caminho
+    // via n8n nenhum dos dois é previsível daqui: o fluxo decide se repassa
+    // `instanceName` (senão a rota usa `UAZAPI_INSTANCE`) e o remoteJid vai
+    // prefixado. Limpar as combinações possíveis é barato e evita o pior caso:
+    // "Zerar sessão" que parece funcionar e deixa o agente lembrando da
+    // conversa anterior no turno seguinte.
+    const phone = testPhone(sessionId);
+    await Promise.all([
+      clearChatHistory(TEST_INSTANCE, sessionId),
+      clearChatHistory(TEST_INSTANCE, phone),
+      clearChatHistory(env.UAZAPI_INSTANCE, phone),
+    ]);
+
     await clearBlock(sessionId);
+    await clearBlock(phone);
     // As observações apontam para índices de mensagem. Sem apagar junto, elas
     // reapareceriam grudadas nas mensagens da próxima conversa.
     await deleteNotesOfSession(sessionId);

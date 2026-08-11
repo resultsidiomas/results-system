@@ -1,8 +1,6 @@
 import { supabase } from '../config/supabase.js';
 import type { Conversation } from '../agents/shared/agent.memory.pg.js';
-
-/** Prefixo do telefone sintético do console de teste — ver `test-chat.routes.ts`. */
-const TEST_PHONE_PREFIX = 'test-';
+import { isTestPhone } from '../shared/test-contact.js';
 
 export interface RealConversationSummary {
   contactId: string;
@@ -70,7 +68,7 @@ export async function listRealConversations(limit = 50): Promise<RealConversatio
 
   const contacts = new Map(
     ((contactData ?? []) as ContactRow[])
-      .filter((contact) => !contact.phone.startsWith(TEST_PHONE_PREFIX))
+      .filter((contact) => !isTestPhone(contact.phone))
       .map((contact) => [contact.id, contact]),
   );
 
@@ -130,7 +128,7 @@ export async function findRealConversation(contactId: string): Promise<RealConve
   const row = contact as ContactRow;
   // Contato de teste tem aba própria; deixar cair aqui confundiria a etiqueta
   // "conversa real", que é justamente o que a tela precisa deixar claro.
-  if (row.phone.startsWith(TEST_PHONE_PREFIX)) return null;
+  if (isTestPhone(row.phone)) return null;
 
   const { data, error } = await supabase
     .from('conversations')

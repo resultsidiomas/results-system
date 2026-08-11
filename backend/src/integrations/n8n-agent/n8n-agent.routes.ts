@@ -13,6 +13,7 @@ import { shouldReactivate } from '../../agents/shared/agent.reactivation.js';
 import { isPauseExpired, clearPauseStart } from '../../agents/shared/agent.pause.js';
 import { sendPriceTableImage } from '../../whatsapp/uazapi/uazapi.sender.js';
 import { PRICE_TABLE_VARIANTS } from '../../agents/commercial/commercial.schema.js';
+import { isTestPhone } from '../../shared/test-contact.js';
 
 const bodySchema = z.object({
   message: z.string().min(1),
@@ -140,7 +141,17 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = await runRoutedTurn(contact, instanceName, remoteJid, message, true);
+    // Contato sintético do console de teste: calcula handoff normalmente (é o
+    // que a equipe quer observar no painel), mas não manda WhatsApp pra Gi com
+    // lead que não existe. O fluxo do n8n chama esta mesma rota no modo de
+    // teste e não tem como sinalizar isso — quem sabe é o formato do telefone.
+    const result = await runRoutedTurn(
+      contact,
+      instanceName,
+      remoteJid,
+      message,
+      !isTestPhone(contact.phone),
+    );
     // `handoff` só significa "Gi foi avisada" — não implica mais silêncio.
     // Score alto/falha técnica alertam a Gi e a IA continua na conversa.
     const pausarIa = result.pauseAi ? 'Sim' : 'Não';

@@ -179,6 +179,16 @@ export const api = {
   resetSession: (sessionId: string) =>
     request<{ status: string }>(`/api/v1/admin/test-chat/${sessionId}`, { method: 'DELETE' }),
 
+  /**
+   * Bolhas já entregues pelo fluxo neste turno, a partir da que a tela mostrou
+   * por último. Consultada enquanto o turno corre — é o que faz a conversa
+   * aparecer no ritmo do fluxo em vez de tudo de uma vez no fim.
+   */
+  turnBubbles: (sessionId: string, after: number) =>
+    request<{ bubbles: Array<{ text: string; at: string }> }>(
+      `/api/v1/admin/test-chat/${sessionId}/bubbles?after=${after}`,
+    ),
+
   saveNote: (sessionId: string, messageIndex: number, note: string) =>
     request<{ message_index: number; note: string }>(
       `/api/v1/admin/test-chat/${sessionId}/notes/${messageIndex}`,

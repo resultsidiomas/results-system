@@ -35,22 +35,45 @@ Webhook Teste ──────────────┘                     
                                                                   ▼        ▼
                                                             É teste?   [produção:
                                                             ├ não ─► UAZAPI  fim]
-                                                            └ sim ─► (volta    │
-                                                                  pro loop)    ▼
-                                                                        É teste?
-                                                                        └ sim ─►
-                                                                   Montar resposta
-                                                                   ─► Respond to
-                                                                        Webhook
+                                                            └ sim ─►           │
+                                                          POST /test-bubble    ▼
+                                                          (volta pro loop) É teste?
+                                                                           └ sim ─►
+                                                                      Montar resposta
+                                                                      ─► Respond to
+                                                                           Webhook
 ```
 
-Por que o `Respond to Webhook` fica na saída **done** do loop, e não dentro
-dele: o node responde **uma única vez**. Dentro do loop, ele dispararia na
-primeira bolha e o console receberia só o primeiro pedaço da resposta — parecendo
-que o agente respondeu curto, quando na verdade o teste foi cortado.
+### A bolha aparece no painel na hora, não no fim
 
-O loop continua rodando inteiro (inclusive o `Wait` entre bolhas). A única coisa
-que não acontece em teste é a chamada `POST /send/text` da UAZAPI.
+O `Respond to Webhook` responde **uma única vez** — não dá para o fluxo devolver
+a primeira bolha, esperar, devolver a segunda. Se ele ficasse dentro do loop,
+dispararia na primeira e o console receberia a resposta cortada, parecendo que o
+agente respondeu curto.
+
+Então a direção é invertida: no lugar do `POST /send/text` da UAZAPI, o ramo de
+teste chama
+
+```http
+POST /api/v1/n8n-agent/test-bubble
+Header: x-internal-key: <INTERNAL_API_KEY>
+
+{ "sessionId": "test-teste-1", "text": "conteúdo da bolha" }
+```
+
+e volta para o loop. O painel busca essas bolhas enquanto o turno corre e mostra
+cada uma assim que chega.
+
+**O intervalo entre as bolhas na tela é o `Wait` real do fluxo.** O navegador só
+exibe o que já aconteceu — não anima atraso nenhum. É por isso que a rota existe
+em vez de o front simular a espera: simular daria a mesma aparência sem medir
+nada.
+
+A rota recusa (`400`) qualquer `sessionId` sem o prefixo `test-`, então um `IF`
+mal configurado no fluxo não consegue desviar mensagem de lead de verdade para o
+painel em vez do WhatsApp.
+
+O loop roda inteiro nos dois modos. A única diferença é para onde o texto vai.
 
 ### Como o fluxo sabe que é teste
 
@@ -181,8 +204,36 @@ mesmo node em que o webhook de produção entrega a mensagem normalizada.
 }
 ```
 
-- saída **true** (é teste) → volta pro `Loop Over Items` (não envia nada)
+- saída **true** (é teste) → `HTTP Request` para `/api/v1/n8n-agent/test-bubble`
+  → volta pro `Loop Over Items`
 - saída **false** (produção) → `HTTP Request` da UAZAPI, sem alteração
+
+**Bolha do teste** — no ramo true, no lugar do envio da UAZAPI:
+
+```json
+{
+  "name": "Bolha do teste",
+  "type": "n8n-nodes-base.httpRequest",
+  "typeVersion": 4,
+  "parameters": {
+    "method": "POST",
+    "url": "={{ $env.BACKEND_URL }}/api/v1/n8n-agent/test-bubble",
+    "sendHeaders": true,
+    "headerParameters": {
+      "parameters": [
+        { "name": "x-internal-key", "value": "={{ $env.INTERNAL_API_KEY }}" }
+      ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ sessionId: ($json.number || $json.remoteJid || $json.chatid), text: ($json.text || $json.bloco || $json.output) }) }}",
+    "options": {}
+  }
+}
+```
+
+Mantenha o `Wait` do loop ligado nos dois ramos: é ele que dá o ritmo que o
+painel vai mostrar.
 
 **Montar resposta do teste** — na saída `done` do loop:
 

@@ -14,11 +14,17 @@ import { isPauseExpired, clearPauseStart } from '../../agents/shared/agent.pause
 import { sendPriceTableImage } from '../../whatsapp/uazapi/uazapi.sender.js';
 import { PRICE_TABLE_VARIANTS } from '../../agents/commercial/commercial.schema.js';
 import { isTestPhone } from '../../shared/test-contact.js';
+import { pushTestBubble } from '../../testing/test-bubbles.js';
 
 const bodySchema = z.object({
   message: z.string().min(1),
   sessionId: z.string().min(1),
   contexto: z.record(z.string(), z.unknown()).optional(),
+});
+
+const testBubbleBodySchema = z.object({
+  sessionId: z.string().min(1),
+  text: z.string().min(1).max(4000),
 });
 
 const sendPriceTableBodySchema = z.object({
@@ -163,6 +169,34 @@ export async function n8nAgentRoutes(app: FastifyInstance) {
       sessionId,
       pausarIa,
     });
+  });
+
+  /**
+   * Substitui o `POST /send/text` da UAZAPI quando o contato é de teste.
+   *
+   * O fluxo chama esta rota dentro do mesmo loop de fracionamento, no lugar do
+   * envio — então o intervalo entre uma bolha e outra é o `Wait` real do fluxo,
+   * e o painel mostra a conversa aparecendo no ritmo em que o lead veria no
+   * WhatsApp.
+   *
+   * Só aceita contato sintético: é o que impede uma configuração errada do
+   * fluxo de desviar mensagem de lead de verdade pro painel em vez do WhatsApp.
+   */
+  app.post('/api/v1/n8n-agent/test-bubble', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireInternalAuth(request);
+
+    const parsed = testBubbleBodySchema.safeParse(request.body);
+    if (!parsed.success) throw new BadRequestError('invalid request body');
+
+    const sessionId = parsed.data.sessionId.split('@')[0];
+
+    if (!isTestPhone(sessionId)) {
+      logger.warn('test-bubble recusada para contato não-teste', { sessionId });
+      throw new BadRequestError('rota exclusiva de contato de teste');
+    }
+
+    const total = await pushTestBubble(sessionId, parsed.data.text);
+    return reply.send({ status: 'ok', total });
   });
 
   // Chamado pelo n8n só DEPOIS que todos os blocos de texto já foram

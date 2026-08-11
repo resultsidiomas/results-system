@@ -18,6 +18,7 @@ import { runCommercialTurn } from '../agents/commercial/commercial.service.js';
 import { runSupportTurn } from '../agents/support/support.service.js';
 import { fractureMessage } from '../agents/shared/agent.fracture.js';
 import { isN8nTestConfigured, runN8nTestFlow } from '../testing/n8n-test-flow.js';
+import { getTestBubbles, clearTestBubbles } from '../testing/test-bubbles.js';
 import { env } from '../config/env.js';
 // O contato de teste é um telefone sintético: nunca colide com número real da
 // UAZAPI, e é o que faz o backend e o fluxo n8n concordarem sobre o que é teste.
@@ -165,6 +166,23 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
   });
 
   /**
+   * Bolhas que o fluxo já entregou neste turno, a partir da última que a tela
+   * mostrou. Consultada em intervalo curto enquanto o turno corre, pra conversa
+   * aparecer no mesmo ritmo em que chegaria no WhatsApp.
+   */
+  app.get('/api/v1/admin/test-chat/:sessionId/bubbles', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireAdmin(request);
+    const sessionId = parseSessionId(request);
+
+    const after = z.coerce.number().int().min(0).catch(0).parse(
+      (request.query as { after?: string } | undefined)?.after,
+    );
+
+    const bubbles = await getTestBubbles(testPhone(sessionId), after);
+    return reply.send({ bubbles });
+  });
+
+  /**
    * Manda uma mensagem como se fosse o lead.
    *
    * Com `N8N_TEST_WEBHOOK_URL` configurada, o turno passa pelo fluxo REAL do
@@ -181,6 +199,10 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
 
     const { message, bypassN8n } = parsed.data;
     const startedAt = Date.now();
+
+    // Zera o buffer antes do turno: o painel conta a partir do zero a cada
+    // mensagem, e sobra do turno anterior apareceria como resposta desta.
+    await clearTestBubbles(testPhone(sessionId));
 
     if (isN8nTestConfigured() && !bypassN8n) {
       const result = await runN8nTestFlow({
@@ -281,6 +303,7 @@ export async function adminTestChatRoutes(app: FastifyInstance) {
 
     await clearBlock(sessionId);
     await clearBlock(phone);
+    await clearTestBubbles(phone);
     // As observações apontam para índices de mensagem. Sem apagar junto, elas
     // reapareceriam grudadas nas mensagens da próxima conversa.
     await deleteNotesOfSession(sessionId);

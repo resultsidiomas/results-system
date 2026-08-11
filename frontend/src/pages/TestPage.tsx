@@ -103,6 +103,33 @@ export default function TestPage() {
     setSending(true);
     setError(null);
 
+    // Enquanto o turno corre, busca as bolhas que o fluxo já entregou. O
+    // intervalo entre elas na tela é o `Wait` real do fluxo — o navegador só
+    // mostra o que já aconteceu, não simula atraso nenhum.
+    let shown = 0;
+    const poll = window.setInterval(async () => {
+      try {
+        const { bubbles } = await api.turnBubbles(sessionId, shown);
+        if (bubbles.length === 0) return;
+
+        shown += bubbles.length;
+        setPending((current) => [
+          ...current,
+          ...bubbles.map((bubble) => ({
+            index: -1,
+            role: 'assistant' as const,
+            content: bubble.text,
+            at: bubble.at,
+            agentType: 'commercial' as const,
+            note: null,
+          })),
+        ]);
+      } catch {
+        // Falha de rede no meio do turno não pode derrubar o envio: a resposta
+        // completa ainda vai chegar pelo `sendTestMessage`.
+      }
+    }, 900);
+
     try {
       const turn = await api.sendTestMessage(sessionId, message, bypassN8n);
       setLastTurn(turn);
@@ -111,6 +138,7 @@ export default function TestPage() {
       setError((err as Error).message);
       setPending([]);
     } finally {
+      window.clearInterval(poll);
       setSending(false);
     }
   }
